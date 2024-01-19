@@ -1,0 +1,26 @@
+{
+    "id": "63D24449",
+    "path": "~/Desktop/Disease-metapop/Models/bat-matrix/bat-sims.R",
+    "project_path": "bat-sims.R",
+    "type": "r_source",
+    "hash": "1694406157",
+    "contents": "",
+    "dirty": false,
+    "created": 1705605820522.0,
+    "source_on_save": false,
+    "relative_order": 4,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "852,0",
+        "scrollLine": "823"
+    },
+    "folds": "18|155|114|0|\n115|165|221|0|\n222|66|252|0|\n253|80|294|0|\n295|38|298|0|\n299|33|309|0|\n310|34|318|0|\n319|36|330|0|\n331|29|338|0|\n339|23|342|0|\n343|28|354|0|\n355|40|358|0|\n359|34|401|0|\n402|33|417|0|\n418|30|420|0|\n421|53|460|0|\n461|55|471|0|\n472|31|484|0|\n485|29|492|0|\n493|35|501|0|\n504|157|631|0|\n632|172|754|0|\n",
+    "lastKnownWriteTime": 1633983675,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1705605856907,
+    "read_only": false,
+    "read_only_alternatives": []
+}

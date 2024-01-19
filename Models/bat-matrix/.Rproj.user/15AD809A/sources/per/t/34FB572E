@@ -1,0 +1,24 @@
+{
+    "id": "34FB572E",
+    "path": "~/Desktop/Disease-metapop/Models/bat-matrix/fit_MSIRN_matAB.R",
+    "project_path": "fit_MSIRN_matAB.R",
+    "type": "r_source",
+    "hash": "1153896119",
+    "contents": "",
+    "dirty": false,
+    "created": 1705605673737.0,
+    "source_on_save": false,
+    "relative_order": 3,
+    "properties": {
+        "source_window_id": "",
+        "Source": "Source"
+    },
+    "folds": "32|147|118|0|\n119|160|215|0|\n216|154|315|0|\n316|167|424|0|\n426|183|549|0|\n552|182|675|0|\n676|66|706|0|\n707|80|748|0|\n749|84|792|0|\n793|85|836|0|\n837|38|840|0|\n841|33|851|0|\n852|34|860|0|\n861|36|872|0|\n873|29|880|0|\n885|28|896|0|\n897|40|900|0|\n901|34|943|0|\n944|33|959|0|\n960|30|962|0|\n963|53|1002|0|\n1003|55|1013|0|\n1014|31|1026|0|\n1027|29|1034|0|\n1035|35|1043|0|\n1046|170|1319|0|\n1320|181|1616|0|\n1617|190|1919|0|\n1920|191|2222|0|\n2226|184|2398|3|\n2399|205|2618|3|\n2623|138|2812|0|\n2816|145|3066|0|\n3070|153|3720|0|\n",
+    "lastKnownWriteTime": 1633960287,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1705605729216,
+    "read_only": false,
+    "read_only_alternatives": []
+}

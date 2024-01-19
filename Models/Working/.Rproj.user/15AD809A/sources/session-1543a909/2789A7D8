@@ -1,0 +1,27 @@
+{
+    "id": "2789A7D8",
+    "path": "~/Desktop/Disease-metapop/Models/Working/WorkingDraft-SimulateMSIRN.R",
+    "project_path": "WorkingDraft-SimulateMSIRN.R",
+    "type": "r_source",
+    "hash": "0",
+    "contents": "",
+    "dirty": false,
+    "created": 1705517848467.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "tempName": "Untitled1",
+        "source_window_id": "",
+        "Source": "Source",
+        "cursorPosition": "31,0",
+        "scrollLine": "32"
+    },
+    "folds": "46|55|56|0|\n58|36|69|0|\n71|33|81|0|\n83|23|86|0|\n194|80|235|0|\n242|31|254|0|\n",
+    "lastKnownWriteTime": 1705700287,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1705700287796,
+    "read_only": false,
+    "read_only_alternatives": []
+}
