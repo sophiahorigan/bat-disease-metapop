@@ -19,10 +19,8 @@
 # statistics : AP (annual persistence: with prob > 50% infection will persist in population for 1 year)
 #           : LP (long-term persisence: with prob > 50% infection will persist in population for 100 years)
 
-## PART 2 : MAKE IT CONTINUOUS TIME?
-
 ## PART 2 : MAKE IT STOCHASTIC 
-# how do I do this???
+# instead of fixed variables, draw value from a distribution
 
 ## PART 3 : MAKE IT A METAPOPULATION MODEL
 # make SIR model into an array with variable 'patch' numbers
