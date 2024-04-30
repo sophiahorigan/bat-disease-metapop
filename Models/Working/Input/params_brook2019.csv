@@ -1,0 +1,4 @@
+﻿model_char,model_num,beta_mean,beta_sd,recov_mean,recov_sd,mort_ad_mean,mort_ad_sd,mort_juv_mean,mort_juv_sd,fecundity_mean,fecundity_sd,wane_mean,wane_sd,sigma_mean,sigma_sd,mu.sick_mean,mu.sick_sd,rho_mean,rho_sd
+MSIR,1,1.57911,0.1,1,0,0.207,0.02,0.456,0.1,0.48,0.1,1.088069878,0.02,0.022273536,0.001,1,0,0,0
+MSIRN,2,2.203968,0.1,1,0,0.207,0.02,0.456,0.1,0.48,0.1,0.080142488,0.02,0.007804979,0.0001,1,0,0,0
+MSIRNI,3,2.203968,0.1,1,0,0.207,0.02,0.456,0.1,0.48,0.1,0.080142488,0.02,0.007804979,0.0001,1,0,0.041666666,0.001
