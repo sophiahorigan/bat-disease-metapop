@@ -1,32 +1,24 @@
 ##############################
-## CONNECTIVITY - PART 4 ##
+## GRID STRUCTURE 2x2 - PART 5A ##
 ############################
 
 # Created by Sophia Horigan (shorigan@uchicago.edu)
 # Started: 01-30-24
-# Last updated: 04-20-24
+# Last updated: 05-07-24
 
 # Project Overview: This project seeks to use existing demographic data and the candidate transmission models
 # to explore persistence threshholds for hypothetical pathogens under data-based metapopulation structure of Pteropus
 # rufus in Madagascar. 
 
-## PART 4 : ADD IN CONNECTIVITY STRUCTURE
-# Two mechanisms of connectivity
-# 1. dispersal i.e. bat moves to different subpop
-# 2. interminging i.e. interaction (read: potential transmission) at communal foraging site
-# ASSUMMPTIONS:
-  # Probability of dispersal and interaction is same regardless of disease state
-  # Only adults disperse
+## PART 5 : EXPAND THE MODEL TO BE A 2x2 GRID STRUCTURE
+# For simulations, I want to create a grid structure of subpopulations. To do this, I will make all state variables arrays instead of lists.
+# Where the array location matches the grid location. I'll start with a 2x2 grid of arbitrary size.
+# This will require inputs of both dispersal and intermingling probability in a 2x2 grid.
+# I will set up the model so that it can randomly populate grid spaces (random draw of a set number of patch IDs)
+# Then it will randomly assign initial conditions to those populations
 
 # Accomplishments
-# 02-12-24 Set up dispersal.df - movement of individuals
-# 02-13-24 Realized I was making it harder than it needed to be - can keep connect.df the same if assuming equal prob of dispersal 
-# 04-17-24 Improved saving and plotting features
-# 04-20-24 Distinguished dispersal vs intermingling in code language
-# 04-20-24 Started to implement intermingling
-  # need to make all matrices multidimensional by num_subpops...
-  # maybe should fix the number of subpops as a grid. if I do that, should make all variables an array that reflects position in the grid
-# 04-20-24 Brainstormed grid structure - next evolution of model
+# created function GeneratePops which can statically or stochastically generate occupied patches with an initial population size
 
 # TO DO
 # figure out how to list all init pop sizes on figure and output file - or print an associated params/inputs file for each figure??
@@ -54,8 +46,8 @@ library(ggplot2)
 library(reshape2)
 library(beepr)
 
-setwd("/Users/sophiahorigan/Documents/GitHub/Bat-disease-metapop/bat-disease-metapop/Models/Working/")
-
+setwd("/Users/sophiahorigan/Documents/GitHub/Bat-disease-metapop/bat-disease-metapop/Models/WIP/")
+setwd("/Users/shorigan/Documents/GitHub/Bat-disease-metapop/bat-disease-metapop/Models/WIP/")
 
 ##########################
 ## Helper Functions
@@ -180,6 +172,8 @@ BuildTMatMSIR <- function(model, stoch_disease, c, Npop_epi, Ipop, sum_interming
       Tmat[((j-1)*4+1):(j*4),((j-1)*4+1):(j*4)] <- mat1*surv
     }
   }
+  #print(Tmat)
+  #readline(prompt="Press [enter] to continue")
   return(Tmat)
 }
 
@@ -247,7 +241,12 @@ BuildTMatMSIRN <- function(model, c, stoch_disease, Npop_epi, Ipop, sum_intermin
     wane <- rnorm(nage, param.array$wane_mean[model], param.array$wane_sd[model])
     mu.sick <- rnorm(nage, param.array$mu.sick_mean[model], param.array$mu.sick_sd[model])
     recov <- rnorm(1, param.array$recov_mean[model], param.array$recov_sd[model])
-    rho <- rnorm(1, param.array$rho_mean[model], param.array$rho_sd)
+    if (model == 2){ # MSIRN
+      rho = 0
+    }
+    else if (model == 3){ # MSIRNI
+      rho <- rnorm(1, param.array$rho_mean[model], param.array$rho_sd)
+    }
   }
   else if(stoch_disease == FALSE){
     beta <- rep(param.array$beta_mean[model], nage) 
@@ -255,7 +254,12 @@ BuildTMatMSIRN <- function(model, c, stoch_disease, Npop_epi, Ipop, sum_intermin
     mu.sick <- rep(param.array$mu.sick_mean[model], nage)
     wane <- rep(param.array$wane_mean[model], nage)
     recov <- param.array$recov_mean[model]
-    rho <- param.array$rho_mean[model]
+    if (model == 2){
+      rho = 0;
+    }
+    else if (model == 3){
+      rho <- param.array$rho_mean[model]
+    }
   }
   waning.maternal = wane
   age.rate <- rep(age.rate, nage)
@@ -488,6 +492,92 @@ BuildIMat <- function(nage, nclass, intermingle.df, num_subpop, biweek){
   return(connect.matrix2)
 }
 
+# set up grid and randomly populate
+GeneratePops <- function(num_patches, prop_occupied_patches, grid_mode, pop_mode){
+  
+  # check for even number of subpops for grid structure (num_subpop/2 x num_subpop/2 grid)
+  if (num_subpop %% 2 != 0){
+    print("ERROR: need an even number of subpops for grid structure.")
+    stop()
+  }
+  
+  # make pop model array to hold 1 for occupied, 0 for not occupied
+  occupation_vector <<- c(rep(0, num_patches))
+  
+  # determine number of initial occupied patches
+  num_occupied_patches <<- round(num_patches * prop_occupied_patches, digits = 0)
+  
+  # check mode for determining which patches are occupied
+  if (grid_mode == 'stochastic'){
+    # generate 'num_occupied_grids' random numbers from 1 - num_subpops
+    random_pop_list = sample(1:num_patches, num_occupied_patches)
+    init_pop_list <- c(random_pop_list)
+    cat("Initial occupied patches: ", init_pop_list, "\n")
+    
+    for (i in 1:num_patches){
+      if (i %in% init_pop_list){
+        occupation_vector[i] = 1
+      }
+    }
+    cat(num_occupied_patches, " initial occupied grids at locations: ", occupation_vector, "\n")
+    
+  }
+  else if (grid_mode == 'static'){
+    # generate 'num_occupied_grids' evenly spaced numbers from 1 - num_subpops
+    # determine stepwise interval for occupied patches
+    interval = round(num_patches / num_occupied_patches, digits = 0)
+    print(interval)
+    print(occupation_vector)
+    
+    # in a list, patches with an initial pop get a 1, without get a 0 
+    for (i in 1:num_patches){
+      if (i == 1){
+        occupation_vector[i] = 1
+        ticker = i
+      }
+      if (i == (ticker + interval) && sum(occupation_vector) < num_occupied_patches){
+        
+        occupation_vector[i] = 1
+        ticker = i
+      }
+    }
+    cat(num_occupied_patches, " initial occupied grids at locations ", occupation_vector, "\n")
+  }
+  else {
+    print("ERROR: options for grid_mode are 'static or 'stochastic'")
+    stop()
+  }
+  
+  # link each patch with a population size
+  init_pop_vector <- c(rep(0, num_patches))
+  
+  if (pop_mode == 'stochastic'){
+    for (i in 1:length(init_pop_vector)){
+      if (occupation_vector[i] == 1){
+        init_pop_vector[i] = sample(50:5000, 1) # what should this be? a draw from a distribution or at least informed by current estimated pop sizes?
+      }
+    }
+    cat("init pop vector complete: ", init_pop_vector, "\n")
+  }
+  else if (pop_mode == 'static'){
+    init_pop_static = sample(50:5000, 1)
+    for (i in 1:length(init_pop_vector)){
+      if (occupation_vector[i] == 1){
+        init_pop_vector[i] = init_pop_static # what should this be? a draw from a distribution or at least informed by current estimated pop sizes?
+      }
+    }
+    cat("init pop vector complete: ", init_pop_vector, "\n")
+  }
+  else {
+    print("ERROR: options for grid_mode are 'static or 'stochastic'")
+    stop()
+  }
+  
+  return(init_pop_vector)
+
+}
+
+
 ################
 ## LOAD PARAMS
 ###############
@@ -497,14 +587,11 @@ param.array <- read.csv("Input/params_brook2019.csv")
 param.array
 
 # probability they switch to a different roost (also from telem? from other data?)
-dispersal.df <- as.matrix(read.csv("Input/dispersal_static_low.csv", header = FALSE))
-dispersal.df <- as.matrix(read.csv("Input/dispersal_static_high.csv", header = FALSE))
-dispersal.df <- as.matrix(read.csv("Input/dispersal_static_NONE.csv", header = FALSE))
-dispersal.df <- as.matrix(read.csv("Input/dispersal_static_extralow.csv", header = FALSE))
+dispersal.df <- as.matrix(read.csv("Input/dispersal_static_low_4.csv", header = FALSE))
 dispersal.df
 
 # probability they will encounter an individual (home range overlap)
-intermingle.df <- as.data.frame(read.csv("Input/intermingle_static_low.csv", header = FALSE))
+intermingle.df <- as.data.frame(read.csv("Input/intermingle_static_low_4.csv", header = FALSE))
 intermingle.df
 
 ##########################
@@ -569,7 +656,7 @@ SimOneModel <- function(model, num_subpop, burnin, sim_pop, yrs, ntyr, age.brk, 
     
     stab.struct = Re(eigen(mat1)$vector[,1])
     stab.struct <- stab.struct/sum(stab.struct)
-    # plot(stab.struct, xlab="Age", ylab="Proportion")
+   # plot(stab.struct, xlab="Age", ylab="Proportion")
     
     ####################################################################
     ## Use stable age structure to generate bat population for time seq
@@ -577,7 +664,7 @@ SimOneModel <- function(model, num_subpop, burnin, sim_pop, yrs, ntyr, age.brk, 
     
     # check lambda
     lambda = round(max(Re(eigen(mat1)$value)), 8)
-    #print(paste0("lambda = ", lambda)) #we need the pop to replace itself or grow slightly - must be 1 or greater
+   # print(paste0("lambda = ", lambda)) #we need the pop to replace itself or grow slightly - must be 1 or greater
     
     # gives counts of bats per age year
     bat.mat = stab.struct*sim_pop[i]
@@ -590,7 +677,14 @@ SimOneModel <- function(model, num_subpop, burnin, sim_pop, yrs, ntyr, age.brk, 
     
     if(model==1){ # MSIRS
       R_init = rep(0, s)
-      I_init = rep(0, s); I_init[3] = 5 
+      I_init = rep(0, s) 
+      if (i == 1){
+        I_init[3] = 5
+      }
+      if (i == 2){
+        I_init[3] = 20
+      }
+       
       M_init = rep(0, s)
       S_init = bat.mat - I_init 
       
@@ -642,22 +736,26 @@ SimOneModel <- function(model, num_subpop, burnin, sim_pop, yrs, ntyr, age.brk, 
         
         tmp = TransformVect(vec=N_pop_ts[[i]][,j], s=s, c=nclass)
         Npop_epi[[i]] <- tmp
+        #print(i)
+        #print(Npop_epi[[i]])
         
         tmp = MatSplit(matrix(Npop_epi[[i]], ncol=1), r=s, c=1)[,,3] # I is in position 3
         Ipop[[i]] <- tmp
+        #print(Ipop[[i]])
+        #readline(prompt="Press [enter] to continue")
       }
     
     # calculate intermingling factor
-      sum_intermingle <- list(rep(0, as.numeric(num_subpop)))
+      sum_intermingle <- c(rep(0, as.numeric(num_subpop)))
       
       for (i in 1:num_subpop){  
-        for (j in 1:num_subpop){
-          if (i != j){
+        for (ii in 1:num_subpop){
+          if (i != ii){
             if (intermingling == TRUE){
-              sum_intermingle[[i]] = sum_intermingle[[i]] + (sum(Ipop[[j]])/sum(Npop_epi[[j]]) * intermingling.df[i][j]) 
+              sum_intermingle[i] = sum_intermingle[i] + (sum(Ipop[[ii]])/sum(Npop_epi[[ii]]) * intermingle.df[i,ii]) 
             }
             else if (intermingling == FALSE){
-              sum_intermingle[[i]] = 0
+              sum_intermingle[i] = 0
             }
           }
         }
@@ -670,16 +768,18 @@ SimOneModel <- function(model, num_subpop, burnin, sim_pop, yrs, ntyr, age.brk, 
       
       if(model==1){ # MSIRS
         # generate SIR matrix
-         tmp = BuildTMatMSIR(model = model, Npop_epi = Npop_epi[[i]], Ipop = Ipop[[i]], sum_intermingle = sum_intermingle[[i]], stoch_disease = stoch_disease, param.array = param.array, c = nclass, age.classes = 1:s, age.brk = age.brk, surv.biwk = (1-mort_ad[i])^(1/ntyr), surv.juv.biwk = (1-mort_juv[i])^(1/ntyr), add.inf.mort = add.inf.mort, age.rate = 1/ntyr)
+         tmp = BuildTMatMSIR(model = model, Npop_epi = Npop_epi[[i]], Ipop = Ipop[[i]], sum_intermingle = sum_intermingle[i], stoch_disease = stoch_disease, param.array = param.array, c = nclass, age.classes = 1:s, age.brk = age.brk, surv.biwk = (1-mort_ad[i])^(1/ntyr), surv.juv.biwk = (1-mort_juv[i])^(1/ntyr), add.inf.mort = add.inf.mort, age.rate = 1/ntyr)
          Tmat[[i]] <- tmp
+         #print(Tmat[[i]])
+         #readline(prompt="Press [enter] to continue")
         
         # generate fecundity matrix
         Fmat <- BuildFMatMSIR(age.classes = 1:s, fecundity = fecundity[i], surv.biwk = (1-mort_ad[i])^(1/ntyr), biwk = biwk1)
-
+    
       }
       else if(model==2 || model==3){ # MSIRN, MSIRNI
         # generate SIR matrix
-        tmp <- BuildTMatMSIRN(model = model, Npop_epi = Npop_epi[[i]], Ipop = Ipop[[i]], sum_intermingle = sum_intermingle[[i]], stoch_disease = stoch_disease, param.array = param.array, c = nclass, age.classes = 1:s, age.brk = age.brk, surv.biwk = (1-mort_ad[i])^(1/ntyr), surv.juv.biwk = (1-mort_juv[i])^(1/ntyr), add.inf.mort = add.inf.mort, age.rate = 1/ntyr)
+        tmp <- BuildTMatMSIRN(model = model, Npop_epi = Npop_epi[[i]], Ipop = Ipop[[i]], sum_intermingle = sum_intermingle[i], stoch_disease = stoch_disease, param.array = param.array, c = nclass, age.classes = 1:s, age.brk = age.brk, surv.biwk = (1-mort_ad[i])^(1/ntyr), surv.juv.biwk = (1-mort_juv[i])^(1/ntyr), add.inf.mort = add.inf.mort, age.rate = 1/ntyr)
         Tmat[[i]] <- tmp
         
         # generate fecundity matrix
@@ -692,18 +792,17 @@ SimOneModel <- function(model, num_subpop, burnin, sim_pop, yrs, ntyr, age.brk, 
       
       #move forward in time
       N_pop_ts[[i]][,j+1] <- transMat %*% N_pop_ts[[i]][,j]
-      #print(paste0("Pre dispersal subpop", i, "= ",  N_pop_ts[[i]][,j+1]))
-      #print(i)
-      #print(N_pop_ts[[i]][,j+1])
-      #print(class(N_pop_ts[[i]][,j+1]))
+
     }
     
     # stitch current pops into matrix
-    tmp <- list()
+    tmp2 <- list()
     for (i in 1:num_subpop){
-      tmp[[i]] <- N_pop_ts[[i]][,j+1]
+      tmp <- N_pop_ts[[i]][,j+1]
+      tmp2[[i]] <- tmp
     }
-    N_pop <- do.call(rbind, tmp)
+    N_pop <- do.call(rbind, tmp2)
+    #print(N_pop)
     
     ##############################
     ## DISPERSAL
@@ -715,6 +814,8 @@ SimOneModel <- function(model, num_subpop, burnin, sim_pop, yrs, ntyr, age.brk, 
     # split resulting matrix and fill in pop list
     for (i in 1:num_subpop){
       N_pop_ts[[i]][,j+1] <- N_pop[i,]
+     # print("N pop at t+1")
+      #print(N_pop_ts[[i]][,j+1])
     }
   }
   
@@ -858,8 +959,8 @@ SimAllModels <- function(yrs, numsims, do.save){
     
     SimOneModel(model = i,
                 numsims = numsims,
-                num_subpop = 3,
-                sim_pop = c(2000,110,200), 
+                num_subpop = 4,
+                sim_pop = GeneratePops(num_subpop, prop_occupied = 0.5, grid_mode = "static", pop_mode = "static"), 
                 param.array = param.array, 
                 burnin = 0, 
                 yrs = yrs, 
@@ -921,7 +1022,7 @@ SimWrap <- function(model, sim_pop, numsims, num_subpop, param.array, burnin, yr
                       printpop = FALSE,
                       stoch_demo = TRUE,
                       stoch_disease = TRUE,
-                      intermingling = FALSE,
+                      intermingling = TRUE,
                       dispersal = FALSE)
     output$model <- model
     output$sim <- i
@@ -1077,11 +1178,11 @@ SimWrap <- function(model, sim_pop, numsims, num_subpop, param.array, burnin, yr
 
 test <- SimWrap(model = 1,
                   numsims = 5,
-                  num_subpop = 2,
-                  sim_pop = c(1000, 1000), 
+                  num_subpop = 4,
+                  sim_pop = GeneratePops(num_patches = 4, prop_occupied_patches = 1, grid_mode = "static", pop_mode = "stochastic"), 
                   param.array = param.array, 
                   burnin = 0, 
-                  yrs = 1, 
+                  yrs = 100, 
                   do.plot = TRUE,
                   do.save = FALSE)
 
