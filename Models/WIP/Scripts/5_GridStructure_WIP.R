@@ -19,19 +19,15 @@
 
 # Accomplishments
 # created function GeneratePops which can statically or stochastically generate occupied patches with an initial population size
+# Allow for pops of 0: made init I based on input proportion, put check on foi to set to 0 if pop at 0 to avoid /0 errors
 
 # TO DO
 # figure out how to list all init pop sizes on figure and output file - or print an associated params/inputs file for each figure??
 # because the results depend so much on initial conditions, will need to simulate under a range of initpop, pop growth, and disease
   # heatmap of persistence, then mark where our data suggests the pop is 
 # Develop BuildDMat and BuildIMat 
-# Make Npop and other subpop tracking states into arrays instead of lists to accommodate grid locations (EXPAND TO GRID STRUCTURE)
-  # input: grid dimensions
-  # input: grid size (? or just say one patch holds one population. but need general size to overlay on map of Mada)
-  # input: percentage of occupied patches starting
-  # input: patch structure (randomly occupied, clustered, evenly spaced, etc)
 # figure out how to combine buildTmat and BuildTmatMSIRN - same for fecundity matrix
-# does R have something like a Struct in C that makes it easier to pass everything through functions?
+# fix check in grid size to look for square no. patches not even numbers
 
 rm(list=ls())
 
@@ -45,6 +41,7 @@ library(Matrix)
 library(ggplot2)
 library(reshape2)
 library(beepr)
+library(gridExtra)
 
 setwd("/Users/sophiahorigan/Documents/GitHub/Bat-disease-metapop/bat-disease-metapop/Models/WIP/")
 setwd("/Users/shorigan/Documents/GitHub/Bat-disease-metapop/bat-disease-metapop/Models/WIP/")
@@ -132,6 +129,10 @@ BuildTMatMSIR <- function(model, stoch_disease, c, Npop_epi, Ipop, sum_interming
   # calculate force of infection
   foi = 1-exp(-beta*((sum(Ipop)/sum(Npop_epi)) + sum_intermingle))
   
+  if (sum(Npop_epi) == 0){
+    foi <- rep(0, nage)
+  }
+
   mat1 <- matrix(0,4,4) # MSIR
   
   Tmat <- matrix(0,4*nage,4*nage) #MSIR for every age cohort
@@ -496,7 +497,7 @@ BuildIMat <- function(nage, nclass, intermingle.df, num_subpop, biweek){
 GeneratePops <- function(num_patches, prop_occupied_patches, grid_mode, pop_mode){
   
   # check for even number of subpops for grid structure (num_subpop/2 x num_subpop/2 grid)
-  if (num_subpop %% 2 != 0){
+  if (num_patches %% 2 != 0){
     print("ERROR: need an even number of subpops for grid structure.")
     stop()
   }
@@ -512,7 +513,6 @@ GeneratePops <- function(num_patches, prop_occupied_patches, grid_mode, pop_mode
     # generate 'num_occupied_grids' random numbers from 1 - num_subpops
     random_pop_list = sample(1:num_patches, num_occupied_patches)
     init_pop_list <- c(random_pop_list)
-    cat("Initial occupied patches: ", init_pop_list, "\n")
     
     for (i in 1:num_patches){
       if (i %in% init_pop_list){
@@ -577,7 +577,6 @@ GeneratePops <- function(num_patches, prop_occupied_patches, grid_mode, pop_mode
 
 }
 
-
 ################
 ## LOAD PARAMS
 ###############
@@ -598,7 +597,7 @@ intermingle.df
 ## SIMULATE MODEL
 ##########################
 
-SimOneModel <- function(model, num_subpop, burnin, sim_pop, yrs, ntyr, age.brk, s, param.array, add.inf.mort, printpop, stoch_disease, stoch_demo, intermingling, dispersal){
+SimOneModel <- function(model, num_subpop, burnin, sim_pop, yrs, ntyr, age.brk, s, param.array, init_fracI, add.inf.mort, printpop, stoch_disease, stoch_demo, intermingling, dispersal){
   #################################
   ## Generate stable age structure
   ################################
@@ -673,18 +672,10 @@ SimOneModel <- function(model, num_subpop, burnin, sim_pop, yrs, ntyr, age.brk, 
     ## Initiate infection and run dynamics to equilibrium
     ######################################################
     
-    # introduce a few infecteds and run it out to equilibrium before you grab the data
-    
     if(model==1){ # MSIRS
       R_init = rep(0, s)
-      I_init = rep(0, s) 
-      if (i == 1){
-        I_init[3] = 5
-      }
-      if (i == 2){
-        I_init[3] = 20
-      }
-       
+      I_init = rep(0, s)
+      I_init[3] = init_fracI * sum(bat.mat)
       M_init = rep(0, s)
       S_init = bat.mat - I_init 
       
@@ -692,7 +683,8 @@ SimOneModel <- function(model, num_subpop, burnin, sim_pop, yrs, ntyr, age.brk, 
     }
     else if(model==2 || model==3){ # MSIRN / MSIRNI
       R_init = rep(0, s)
-      I_init = rep(0, s); I_init[3] = 5 # does this initial value change dynamics much?
+      I_init = rep(0, s)
+      I_init[3] = init_fracI * sum(bat.mat)
       M_init = rep(0, s)
       N_init = rep(0, s)
       S_init = bat.mat - I_init 
@@ -723,6 +715,8 @@ SimOneModel <- function(model, num_subpop, burnin, sim_pop, yrs, ntyr, age.brk, 
   ##################################
   
   for (j in 1:(length(times)-1)){
+    
+    # get biweek to have seasonal changes in dispersal
     
     # generate dispersal matrix
     
@@ -770,12 +764,11 @@ SimOneModel <- function(model, num_subpop, burnin, sim_pop, yrs, ntyr, age.brk, 
         # generate SIR matrix
          tmp = BuildTMatMSIR(model = model, Npop_epi = Npop_epi[[i]], Ipop = Ipop[[i]], sum_intermingle = sum_intermingle[i], stoch_disease = stoch_disease, param.array = param.array, c = nclass, age.classes = 1:s, age.brk = age.brk, surv.biwk = (1-mort_ad[i])^(1/ntyr), surv.juv.biwk = (1-mort_juv[i])^(1/ntyr), add.inf.mort = add.inf.mort, age.rate = 1/ntyr)
          Tmat[[i]] <- tmp
-         #print(Tmat[[i]])
          #readline(prompt="Press [enter] to continue")
         
         # generate fecundity matrix
         Fmat <- BuildFMatMSIR(age.classes = 1:s, fecundity = fecundity[i], surv.biwk = (1-mort_ad[i])^(1/ntyr), biwk = biwk1)
-    
+
       }
       else if(model==2 || model==3){ # MSIRN, MSIRNI
         # generate SIR matrix
@@ -997,7 +990,7 @@ SimAllModels <- function(yrs, numsims, do.save){
 ## SIMULATION WRAPPER
 ####################
 
-SimWrap <- function(model, sim_pop, numsims, num_subpop, param.array, burnin, yrs, do.plot, do.save){
+SimWrap <- function(model, sim_pop, numsims, num_subpop, param.array, burnin, yrs, do.plot, do.save.plot, do.save.data){
   
   # generate param array
   param.array = param.array # could have it change year to year 
@@ -1018,11 +1011,12 @@ SimWrap <- function(model, sim_pop, numsims, num_subpop, param.array, burnin, yr
                       s = 20,
                       age.brk = 20,
                       param.array = param.array,
+                      init_fracI = 0.05,
                       add.inf.mort = FALSE, 
                       printpop = FALSE,
                       stoch_demo = TRUE,
                       stoch_disease = TRUE,
-                      intermingling = TRUE,
+                      intermingling = FALSE,
                       dispersal = FALSE)
     output$model <- model
     output$sim <- i
@@ -1030,6 +1024,10 @@ SimWrap <- function(model, sim_pop, numsims, num_subpop, param.array, burnin, yr
   }
   
   sims <<- do.call(rbind, datalist)
+  
+  if(do.save.data==TRUE){
+    write.csv(sims, paste0(getwd(), "/Output"))
+  }
   
   if(do.plot==TRUE){
     # get mean and CI for stochastic realizations
@@ -1057,33 +1055,33 @@ SimWrap <- function(model, sim_pop, numsims, num_subpop, param.array, burnin, yr
     # and plot by model type
     if(model == 1){
       colz = c('M'="violet", 'S' = "mediumseagreen", 'I' = 'tomato', 'R' = "cornflowerblue")
-      p1_1 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.proportion, color=state)) + facet_grid(~subpop) +
+      p1_1 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.proportion, color=state)) + facet_wrap(~subpop, ncol = num_subpop/2) +
         theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
         geom_ribbon(aes(x=time, ymin = lower.ci.proportion, ymax = upper.ci.proportion, fill = state), alpha = 0.2) +
         scale_color_manual(values=colz) +
-        scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRS. initpop = ", sim_pop, " numsims = ", numsims)) +
+        scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRS PROP. numsims = ", numsims)) +
         xlab("Year")
       print(p1_1)
       
-      p1_2 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.totpop)) + facet_grid(~subpop) +
+      p1_2 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.totpop)) + facet_wrap(~subpop, ncol = num_subpop/2) +
         geom_line(aes(x=time, y=mean.count, color=state)) +
         theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
         geom_ribbon(aes(x=time, ymin = lower.ci.count, ymax = upper.ci.count, fill = state), alpha = 0.2) +
         geom_ribbon(aes(x=time, ymin = lower.ci.totpop, ymax = upper.ci.totpop), alpha = 0.2) +
         scale_color_manual(values=colz) +
-        scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRS COUNT. initpop = ", sim_pop, " numsims = ", numsims)) +
+        scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRS COUNT. numsims = ", numsims)) +
         xlab("Year")
       print(p1_2)
       
-      if(do.save==TRUE){
-        ggsave(path = "Output", file = paste0("Frac_Model_", model, "_InitPop_", sim_pop[model], "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
+      if(do.save.plot==TRUE){
+        ggsave(path = "Output", file = paste0("Frac_Model_", model, "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
                plot=p1_1,
                units="mm",  
                width=70, 
                height=60, 
                scale=3, 
                dpi=300)
-        ggsave(path = "Output", file = paste0("Count_Model_", model, "_InitPop_", sim_pop[model], "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
+        ggsave(path = "Output", file = paste0("Count_Model_", model, "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
                plot=p1_2,
                units="mm",  
                width=70, 
@@ -1094,33 +1092,37 @@ SimWrap <- function(model, sim_pop, numsims, num_subpop, param.array, burnin, yr
     }
     if(model == 2){
       colz = c('M'="violet", 'S' = "mediumseagreen", 'I' = 'tomato', 'R' = "cornflowerblue", 'N' = "navy")
-      p2_1 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.proportion, color=state)) + facet_grid(~subpop) +
+      p2_1 <<- grid.arrange(
+        ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.proportion, color=state)) + facet_grid(~subpop) +
         theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
         geom_ribbon(aes(x=time, ymin = lower.ci.proportion, ymax = upper.ci.proportion, fill = state), alpha = 0.2) +
         scale_color_manual(values=colz) +
-        scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRN. initpop = ", sim_pop, " numsims = ", numsims)) +
-        xlab("Year")
+        scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRN PROP. numsims = ", numsims)) +
+        xlab("Year"),
+        nrow = num_subpop/2)
       print(p2_1)
       
-      p2_2 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.totpop)) + facet_grid(~subpop) +
+      p2_2 <<- grid.arrange(
+        ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.totpop)) + facet_grid(~subpop) +
         geom_line(aes(x=time, y=mean.count, color=state)) +
         theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
         geom_ribbon(aes(x=time, ymin = lower.ci.count, ymax = upper.ci.count, fill = state), alpha = 0.2) +
         geom_ribbon(aes(x=time, ymin = lower.ci.totpop, ymax = upper.ci.totpop), alpha = 0.2) +
         scale_color_manual(values=colz) +
-        scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRN COUNT. initpop = ", sim_pop, " numsims = ", numsims)) +
-        xlab("Year")
+        scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRN COUNT. numsims = ", numsims)) +
+        xlab("Year"),
+      nrow = num_subpop/2)
       print(p2_2)
       
-      if(do.save==TRUE){
-        ggsave(path = "Output", file = paste0("Frac_Model_", model, "_InitPop_", sim_pop[model], "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
+      if(do.save.plot==TRUE){
+        ggsave(path = "Output", file = paste0("Frac_Model_", model, "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
                plot=p2_1,
                units="mm",  
                width=70, 
                height=60, 
                scale=3, 
                dpi=300)
-        ggsave(path = "Output", file = paste0("Count_Model_", model, "_InitPop_", sim_pop[model], "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
+        ggsave(path = "Output", file = paste0("Count_Model_", model, "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
                plot=p2_2,
                units="mm",  
                width=70, 
@@ -1131,26 +1133,30 @@ SimWrap <- function(model, sim_pop, numsims, num_subpop, param.array, burnin, yr
     }
     if( model == 3){
       colz = c('M'="violet", 'S' = "mediumseagreen", 'I' = 'tomato', 'R' = "cornflowerblue", 'N' = "navy")
-      p3_1 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.proportion, color=state)) + facet_grid(~subpop) +
+      p3_1 <<- grid.arrange(
+        ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.proportion, color=state)) + facet_grid(~subpop) +
         theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
         geom_ribbon(aes(x=time, ymin = lower.ci.proportion, ymax = upper.ci.proportion, fill = state), alpha = 0.2) +
         scale_color_manual(values=colz) +
-        scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRNI. initpop = ", sim_pop, " numsims = ", numsims)) +
-        xlab("Year")
+        scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRNI PROP. numsims = ", numsims)) +
+        xlab("Year"),
+        nrow = num_subpop/2)
       print(p3_1)
       
-      p3_2 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.totpop)) + facet_grid(~subpop) +
+      p3_2 <<- grid.arrange(
+        ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.totpop)) + facet_grid(~subpop) +
         geom_line(aes(x=time, y=mean.count, color=state)) +
         theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
         geom_ribbon(aes(x=time, ymin = lower.ci.count, ymax = upper.ci.count, fill = state), alpha = 0.2) +
         geom_ribbon(aes(x=time, ymin = lower.ci.totpop, ymax = upper.ci.totpop), alpha = 0.2) +
         scale_color_manual(values=colz) +
-        scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRNI COUNT. initpop = ", sim_pop, " numsims = ", numsims)) +
-        xlab("Year")
+        scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRNI COUNT. numsims = ", numsims)) +
+        xlab("Year"),
+        nrow = num_subpop/2)
       print(p3_2)
       
-      if(do.save==TRUE){
-        ggsave(path = "Output", file = paste0("Frac_Model_", model, "_InitPop_", sim_pop[model], "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
+      if(do.save.plot==TRUE){
+        ggsave(path = "Output", file = paste0("Frac_Model_", model, "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
                plot=p3_1,
                units="mm",  
                width=70, 
@@ -1158,7 +1164,7 @@ SimWrap <- function(model, sim_pop, numsims, num_subpop, param.array, burnin, yr
                scale=3, 
                dpi=300)
         
-        ggsave(path = "Output", file = paste0("Count_Model_", model, "_InitPop_", sim_pop[model], "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
+        ggsave(path = "Output", file = paste0("Count_Model_", model, "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
                plot=p3_2,
                units="mm",  
                width=70, 
@@ -1177,15 +1183,15 @@ SimWrap <- function(model, sim_pop, numsims, num_subpop, param.array, burnin, yr
 ##################
 
 test <- SimWrap(model = 1,
-                  numsims = 5,
-                  num_subpop = 4,
-                  sim_pop = GeneratePops(num_patches = 4, prop_occupied_patches = 1, grid_mode = "static", pop_mode = "stochastic"), 
+                  numsims = 3,
+                  num_subpop = 4, # fixed for now
+                  sim_pop = GeneratePops(num_patches = 4, prop_occupied_patches = 0.25, grid_mode = "stochastic", pop_mode = "stochastic"), 
                   param.array = param.array, 
                   burnin = 0, 
-                  yrs = 100, 
+                  yrs = 1, 
                   do.plot = TRUE,
-                  do.save = FALSE)
-
+                  do.save.plot = FALSE,
+                  do.save.data = FALSE)
 
 beep()
 
