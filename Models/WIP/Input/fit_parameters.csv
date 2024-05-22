@@ -1,0 +1,4 @@
+﻿model_char,model_num,mort_ad_mean,mort_ad_sd,mort_juv_mean,mort_juv_sd,fecundity_mean,fecundity_sd,beta_mean,beta_sd,sigma_mean,sigma_sd,omega_mean,omega_sd,rho_mean,rho_sd,prob_disp_mean,prob_disp_sd,int_rad_010,int_rad_1020,int_rad_2030,int_rad_3040,int_rad_4050,int_rad_5060,int_rad_6070,int_rad_7080,int_rad_8090,int_rad_90100
+MSIRS,1,0.207,0.02,0.456,0.1,0.48,0.1,1.58,,0.02,,1.09,,0,,0.4,0.003,100,200,300,400,500,600,700,800,900,1000
+MSIRN,2,0.207,0.02,0.456,0.1,0.48,0.1,1.96,,0.01,,0.12,,0,,0.4,0.003,100,200,300,400,500,600,700,800,900,1000
+MSIRNI,3,0.207,0.02,0.456,0.1,0.48,0.1,0.711,,0.022,,1.38,,0.256,,0.4,0.003,100,200,300,400,500,600,700,800,900,1000
