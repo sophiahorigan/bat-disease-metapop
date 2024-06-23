@@ -4,7 +4,7 @@
 
 # Created by Sophia Horigan (shorigan@uchicago.edu)
 # Started: 05-22-24
-# Last updated: 05-30-24
+# Last updated: 06-21-24
 
 # Project Overview: This project seeks to use existing demographic data and the candidate transmission models
 # to explore persistence threshholds for hypothetical pathogens under data-based metapopulation structure of Eidolon
@@ -25,10 +25,12 @@
 # added plotting for just infecteds over time - starting to explore figures demonstrating persistence
 # converted param value stochastic draws to lognormal to avoid zero values
 # floored all bat pop counts to avoid partial or negative bats
+# made GetDistanceMat - pairwise distance between each subpop based on fixed grid size
+# set (temporary) upper limits on param draws (uci) to avoid populatione explosions
+# added super loop for varying simulation initial conditions
 
 # TO DO
-# make GetDistanceMat with input: num sub output: pairwise distance between each subpop
-# figure out why N is exploding - is it just a crazy parameter value or something else?
+# add ScaleDistMat which will allow for dispersal prob to be based on distance between subpops
 
 rm(list=ls())
 
@@ -47,7 +49,7 @@ library(beepr)
 library(gridExtra)
 
 setwd("/Users/sophiahorigan/Documents/GitHub/Bat-disease-metapop/bat-disease-metapop/Models/WIP/")
-setwd("/Users/shorigan/Documents/GitHub/Bat-disease-metapop/bat-disease-metapop/Models/WIP/")
+#setwd("/Users/shorigan/Documents/GitHub/Bat-disease-metapop/bat-disease-metapop/Models/WIP/")
 
 ##########################
 ## Helper Functions
@@ -114,24 +116,35 @@ BuildTMatMSIRS <- function(model, stoch_disease, c, Npop_epi, Ipop, sum_intermin
   
   mort.vect <- c((1-surv.juv.biwk), rep((1-surv.biwk), (nage-1))) 
   
+  # create param vectors
+  beta <- as.vector(rep(100, nage))
+  psi <- as.vector(rep(100, nage))
+  omega <- as.vector(rep(100, nage))
+  
   if(stoch_disease == TRUE){
-    beta <- rlnorm(nage, param.array$beta_logmean[model], param.array$beta_logvar[model])
-    psi <- rlnorm(nage, param.array$psi_logmean[model], param.array$psi_logvar[model])
-    omega <- rlnorm(nage, param.array$omega_logmean[model], param.array$omega_logvar[model])
+    for (m in 1:nage){
+      while (beta[m] > param.array$beta_max[model]){
+        beta[m] <- rlnorm(1, param.array$beta_logmean[model], param.array$beta_logvar[model])
+      }
+      while (psi[m] > param.array$psi_max[model]){
+        psi[m] <- rlnorm(1, param.array$psi_logmean[model], param.array$psi_logvar[model])
+      }
+      while (omega[m] > param.array$omega_max[model]){
+        omega[m] <- rlnorm(1, param.array$omega_logmean[model], param.array$omega_logvar[model])
+      }
+    }
   }
+  
   else if(stoch_disease == FALSE){
     beta <- rep(param.array$beta_mean[model], nage) 
     psi <- rep(param.array$psi_mean[model], nage)
     omega <- rep(param.array$omega_mean[model], nage)
   }
+  
   age.rate <- rep(age.rate, nage)
   
   # calculate force of infection
   foi = 1-exp(-beta*((sum(Ipop)/sum(Npop_epi)) + sum_intermingle))
-  
-  if (sum(Npop_epi) == 0){
-    foi <- rep(0, nage)
-  }
   
   mat1 <- matrix(0,4,4) # MSIRS
   
@@ -147,9 +160,9 @@ BuildTMatMSIRS <- function(model, stoch_disease, c, Npop_epi, Ipop, sum_intermin
     mat1[4,4] <- 1-psi[j]
     mat1[2,4] <- psi[j]
     
-    surv <- rep(1-mort.vect[j],4);
+    surv <- rep(1-mort.vect[j], 4); # 4 classes
     
-    if (add.inf.mort==TRUE){
+    if (add.inf.mort==TRUE){ # additional death from infection (3rd slot in vect)
       surv[3] <- pmax(1-(mu.sick[j]*mort.vect[j]),0)
     } 
     
@@ -234,22 +247,39 @@ BuildTMatMSIRN <- function(model, c, stoch_disease, Npop_epi, Ipop, sum_intermin
   # num age classes
   s <- nage <- length(age.classes) 
   
+  # create param vectors
+  beta <- as.vector(rep(100, nage))
+  sigma <- as.vector(rep(100, nage))
+  omega <- as.vector(rep(100, nage))
+  
+  if (model == 2){ # no rho
+    rho <- as.vector(rep(0, nage))
+  }
+  if (model == 3){
+    rho <- as.vector(rep(100, nage))
+  }
+  
   # mortality
   mort.vect <- c((1-surv.juv.biwk), rep((1-surv.biwk), (nage-1))) 
   
   # SET DISEASE PARAMETERS  
   if(stoch_disease == TRUE){
-    beta <- rlnorm(nage, param.array$beta_logmean[model], param.array$beta_logvar[model])
-    sigma <- rlnorm(nage, param.array$sigma_logmean[model], param.array$sigma_logvar[model])
-    omega <- rlnorm(nage, param.array$omega_logmean[model], param.array$omega_logvar[model])
-    
-    if (model == 2){
-      rho <- rep(param.array$rho_mean[model], nage)
-    }
-    else if (model == 3){
-      rho <- rlnorm(nage, param.array$rho_logmean[model], param.array$rho_logvar[model])
+    for (m in 1:nage){
+      while (beta[m] > param.array$beta_max[model]){
+        beta[m] <- rlnorm(1, param.array$beta_logmean[model], param.array$beta_logvar[model])
+      }
+      while (sigma[m] > param.array$sigma_max[model]){
+        sigma[m] <- rlnorm(1, param.array$sigma_logmean[model], param.array$sigma_logvar[model])
+      }
+      while (omega[m] > param.array$omega_max[model]){
+        omega[m] <- rlnorm(1, param.array$omega_logmean[model], param.array$omega_logvar[model])
+      }
+      while (rho[m] > param.array$rho_max[model]){
+        rho[m] <- rlnorm(1, param.array$rho_logmean[model], param.array$rho_logvar[model])
+      }
     }
   }
+  
   else if(stoch_disease == FALSE){
     beta <- rep(param.array$beta_mean[model], nage) 
     sigma <- rep(param.array$sigma_mean[model], nage)
@@ -271,19 +301,19 @@ BuildTMatMSIRN <- function(model, c, stoch_disease, Npop_epi, Ipop, sum_intermin
   
   for (j in 1:nage) {     # fill in epi matrix for each age class. this gives probability of transmission per biweek for the model
     mat1[] <- 0
-    mat1[1,1] <- 1- omega[j]
+    mat1[1,1] <- 1-omega[j]
     mat1[2,1] <- omega[j]
     mat1[2,2] <- 1-foi[j]
     mat1[3,2] <- foi[j]
     mat1[3,3] <- 1-recov
     mat1[3,5] <- rho[j]
     mat1[4,3] <- recov
-    mat1[4,4] <- 1-sigma[j]
-    mat1[5,4] <- sigma[j]
+    mat1[4,4] <- 1-sigma[j] # problem
+    mat1[5,4] <- sigma[j] # problem
     mat1[5,5] <- 1-rho[j]
     
     # survival 
-    surv <- rep(1-mort.vect[j],5); # equal across all age groups
+    surv <- rep(1-mort.vect[j],5); # equal across all classes
     
     # optional : add infection-induced mortality
     if (add.inf.mort==TRUE){
@@ -321,8 +351,8 @@ BuildFMatMSIRN <- function(age.classes, fecundity, surv.biwk, biwk){
     new.fec = fecundity*surv.biwk*.25
   }else if (biwk==3|biwk==25){
     new.fec = fecundity*surv.biwk*.1
-    #}else if (biwk==4|biwk ==24){
-    #new.fec = fecundity*surv.biwk*.05
+    }else if (biwk==4|biwk ==24){
+    new.fec = fecundity*surv.biwk*.05
   }else{
     new.fec = 0
   }
@@ -350,10 +380,7 @@ BuildFMatMSIRN <- function(age.classes, fecundity, surv.biwk, biwk){
 }
 
 # dispersal matrix 
-BuildDMat <- function(num_patches, ScaleDistMat, d.mode, biweek){
-  
-  # create matrix
-  DMat <- matrix(NA, ncol = num_patches, nrow = num_patches)
+BuildDMat <- function(num_patches, d.mode, biweek){
   
   if (d.mode == 'seasonal'){
     # seasonal changes in dispersal probability # for example
@@ -364,18 +391,21 @@ BuildDMat <- function(num_patches, ScaleDistMat, d.mode, biweek){
       disp.vec = rlnorm(num_patches, param.array$prob_disp_mean_WET[model], param.array$prob_disp_sd_WET[model])
     }
   }
+  
   else if (d.mode == 'annual'){
-    disp.vec = rlnorm(num_patches, param.array$prob_disp_mean[model], param.array$prob_disp_sd[model])
+    #disp.vec = rlnorm(num_patches, param.array$prob_disp_mean[model], param.array$prob_disp_sd[model])
+    disp.vec = rep(0.2772918/(num_patches-1), num_patches) # prob of leaving at all divided amongst prob of going to any other specific subpop
   }
 
   # fill in matrix with dispersal out
   for (i in 1:num_patches){
     for (j in 1:num_patches){
       if (i == j){
-        DMat[i,j] = 0 
+        DMat[i,j] <<- 0 
       }
       else{
-        Dmat[i,j] = disp.vecp[i] * ScaleDistMat[i,j] # dispersal probability to each subpop adjusted by distance 
+       # DMat[i,j] = disp.vec[i] * ScaleDistMat[i,j] # dispersal probability to each subpop adjusted by distance 
+        DMat[i,j] <<- disp.vec[i] 
       }
     }
   }
@@ -384,7 +414,7 @@ BuildDMat <- function(num_patches, ScaleDistMat, d.mode, biweek){
   for (i in 1:num_patches){
     for (j in 1:num_patches){
       if (i == j){
-        DMat[i,j] = 1 - sum(DistMat[i,]) # make less than 1 if you want loss of individuals (i.e. 0.001 change of emigrating)
+        DMat[i,j] <<- 1 - sum(DMat[i,]) # make less than 1 if you want loss of individuals (i.e. 0.001 change of emigrating)
       }
     }
   }
@@ -393,42 +423,81 @@ BuildDMat <- function(num_patches, ScaleDistMat, d.mode, biweek){
 }
 
 # intermingling matrix # for larger simulations only
-BuildIMat <- function(num_patches, DistMat, biweek){
+BuildIMat <- function(model, num_patches, DistMat, biweek){
  
-  # create matrix
-  DMat <- matrix(NA, ncol = num_patches, nrow = num_patches)
+  # create tmp matricies
+  OMat <- matrix(NA, ncol = num_patches, nrow = num_patches) # overlap
   
   for(i in 1:num_patches){
-    for(j in 1:num_pathches){
-       if (DistMat[i,j] < param.array$int_rad_010){ # 0 - 10% prob space
-         DistMat[i,j] = sample(0:10, 1)/100
-       } 
-      if (DistMat[i,j] < param.array$int_rad_1020){ # 10 - 20% prob space
-        DistMat[i,j] = sample(10:20, 1)/100
-      } 
-      if (DistMat[i,j] < param.array$int_rad_2030){ # 20 -30% prob space
-        DistMat[i,j] = sample(20:30, 1)/100
+    for(j in 1:num_patches){
+      if (DistMat[i,j] > param.array$int_rad_10_0[model]^2){ # no overlap
+        OMat[i,j] = 0
       }
-      if (DistMat[i,j] < param.array$int_rad_3040){ # 30 - 40% prob space
-        DistMat[i,j] = sample(30:40, 1)/100
+      else if (DistMat[i,j] < param.array$int_rad_10_0[model]^2){
+        OMat[i,j] = param.array$int_rad_10_0[model]^2 - DistMat[i,j]
       }
-      if (DistMat[i,j] < param.array$int_rad_4050){ # 40 - 50% prob space
-        DistMat[i,j] = sample(40:50, 1)/100
+    }
+  }
+  for(i in 1:num_patches){
+    for(j in 1:num_patches){
+      if (OMat[i,j] > 0){
+        if (OMat[i,j] < param.array$int_rad_90_85[model]){ # 100 - 0 %
+          IMat[i,j] <<- runif(1, min = 0.0, max = 1)
+        }
+        if (OMat[i,j] > param.array$int_rad_90_85[model] && OMat[i,j] < param.array$int_rad_85_80[model]){ # 89 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.89)
+        }
+        if (OMat[i,j] > param.array$int_rad_85_80[model] && OMat[i,j] < param.array$int_rad_80_75[model]){ # 84 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.84)
+        }
+        if (OMat[i,j] > param.array$int_rad_80_75[model] && OMat[i,j] < param.array$int_rad_75_70[model]){ # 79 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.79)
+        }
+        if (OMat[i,j] > param.array$int_rad_75_70[model] && OMat[i,j] < param.array$int_rad_70_65[model]){ # 74 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.74)
+        }
+        if (OMat[i,j] > param.array$int_rad_70_65[model] && OMat[i,j] < param.array$int_rad_65_60[model]){ # 69 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.69)
+        }
+        if (OMat[i,j] > param.array$int_rad_65_60[model] && OMat[i,j] < param.array$int_rad_60_55[model]){ # 64 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.64)
+        }
+        if (OMat[i,j] > param.array$int_rad_60_55[model] && OMat[i,j] < param.array$int_rad_55_50[model]){ # 59 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.59)
+        } 
+        if (OMat[i,j] > param.array$int_rad_55_50[model] && OMat[i,j] < param.array$int_rad_50_45[model]){ # 54 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.54)
+        }
+        if (OMat[i,j] > param.array$int_rad_50_45[model] && OMat[i,j] < param.array$int_rad_45_40[model]){ # 49 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.49)
+        }
+        if (OMat[i,j] > param.array$int_rad_45_40[model] && OMat[i,j] < param.array$int_rad_40_35[model]){ # 44 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.44)
+        }
+        if (OMat[i,j] > param.array$int_rad_40_35[model] && OMat[i,j] < param.array$int_rad_35_30[model]){ # 39 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.39)
+        }
+        if (OMat[i,j] > param.array$int_rad_35_30[model] && OMat[i,j] < param.array$int_rad_30_25[model]){ # 34 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.30)
+        }
+        if (OMat[i,j] > param.array$int_rad_30_25[model] && OMat[i,j] < param.array$int_rad_25_20[model]){ # 29 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.29)
+        }
+        if (OMat[i,j] > param.array$int_rad_25_20[model] && OMat[i,j] < param.array$int_rad_20_15[model]){ # 24 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.24)
+        }
+        if (OMat[i,j] > param.array$int_rad_20_15[model] && OMat[i,j] < param.array$int_rad_15_10[model]){ # 19 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.19)
+        }
+        if (OMat[i,j] > param.array$int_rad_15_10[model] && OMat[i,j] < param.array$int_rad_10_0[model]){ # 14 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.14)
+        }
+        if (OMat[i,j] > param.array$int_rad_10_0[model]){ # 9 - 0 %
+          IMat[i,j] <<- runif(1, min = 0, max = 0.09)
+        }
       }
-      if (DistMat[i,j] < param.array$int_rad_5060){ # 50 - 60% prob space
-        DistMat[i,j] = sample(50:60, 1)/100
-      }
-      if (DistMat[i,j] < param.array$int_rad_6070){ # 60 - 70% prob space
-        DistMat[i,j] = sample(60:70, 1)/100
-      }
-      if (DistMat[i,j] < param.array$int_rad_7080){ # 70 - 80% prob space
-        DistMat[i,j] = sample(70:80, 1)/100
-      }
-      if (DistMat[i,j] < param.array$int_rad_8090){ # 80 - 90% prob space
-        DistMat[i,j] = sample(80:90, 1)/100
-      }
-      if (DistMat[i,j] < param.array$int_rad_90100){ # 90 - 100% prob space
-        DistMat[i,j] = sample(90:100, 1)/100
+      else if (OMat[i,j] == 0){
+        IMat[i,j] <<- 0
       }
     }
   }
@@ -437,7 +506,7 @@ BuildIMat <- function(num_patches, DistMat, biweek){
 }
 
 # initiate and randomly populate
-GeneratePops <- function(num_patches, prop_occupied_patches, grid_mode, pop_mode){
+GeneratePops <- function(num_patches, prop_occupied_patches, grid_mode, pop_mode, pop_low, pop_high){
   
   # check for even number of subpops for grid structure (num_subpop/2 x num_subpop/2 grid)
   if (sqrt(num_patches) %% 1 != 0){
@@ -469,8 +538,6 @@ GeneratePops <- function(num_patches, prop_occupied_patches, grid_mode, pop_mode
     # generate 'num_occupied_grids' evenly spaced numbers from 1 - num_subpops
     # determine stepwise interval for occupied patches
     interval = round(num_patches / num_occupied_patches, digits = 0)
-    print(interval)
-    print(occupation_vector)
     
     # in a list, patches with an initial pop get a 1, without get a 0 
     for (i in 1:num_patches){
@@ -497,13 +564,13 @@ GeneratePops <- function(num_patches, prop_occupied_patches, grid_mode, pop_mode
   if (pop_mode == 'stochastic'){
     for (i in 1:length(init_pop_vector)){
       if (occupation_vector[i] == 1){
-        init_pop_vector[i] = sample(50:5000, 1) # what should this be? a draw from a distribution or at least informed by current estimated pop sizes?
+        init_pop_vector[i] = sample(pop_low:pop_high, 1) # what should this be? a draw from a distribution or at least informed by current estimated pop sizes?
       }
     }
     cat("init pop vector complete: ", init_pop_vector, "\n")
   }
   else if (pop_mode == 'static'){
-    init_pop_static = sample(50:5000, 1)
+    init_pop_static = sample(pop_low:pop_high, 1)
     for (i in 1:length(init_pop_vector)){
       if (occupation_vector[i] == 1){
         init_pop_vector[i] = init_pop_static # what should this be? a draw from a distribution or at least informed by current estimated pop sizes?
@@ -521,34 +588,40 @@ GeneratePops <- function(num_patches, prop_occupied_patches, grid_mode, pop_mode
 }
 
 # generate pairwise distance matrix between all grids
-GenerateDistMat <- function(num_patches){
+GenerateDistMat <- function(patch_dim, grid_size){
+
+  ID.key <- matrix(0, ncol = 2, nrow = patch_dim*patch_dim)
   
-    num_patches = 25
-    
-    # distance between center points of two adjacent patches (m)
-    patch.distance = 1000
-    
-    # generate empty distance matrix
-    dist.mat.dim = sqrt(num_patches)
-    DistMat <- matrix(NA, nrow = dist.mat.dim, ncol = dist.mat.dim)
-    
-    # fill diagonal with 0
-    diag(DistMat) <- 0
-    
-    # fill remaining slots
-    for(i in 1:dist.mat.dim){
-      for(j in 1:dist.mat.dim){
-        
+  # assign grid ID to coordinates
+  for (i in 1:patch_dim){
+    for (j in 1:patch_dim){
+      grid_id = (i * j) + ((patch_dim - i) * (j - 1))
+      ID.key[grid_id, 1] <- i
+      ID.key[grid_id, 2] <- j
+    }
+  }
+  
+  # calculate distance between all points and fill matrix
+  dist = grid_size # distance between center points in roost
+  
+  for (k in 1:(patch_dim*patch_dim)){
+    for (l in 1:(patch_dim*patch_dim)){
+      if (k == l){
+        DistMat[k,l] <<- 0 # no distance between same roost
+      }
+      else{
+        DistMat[k,l] <<- sqrt((ID.key[l, 1] - ID.key[k, 1])^2 + (ID.key[l, 2] - ID.key[k, 2])^2) * dist
       }
     }
-    
-      
+  }
     return(DistMat)
 }
 
 # scale distance matrix so all values total 1
 ScaleDistMat <- function(DistMat, num_patches){
   # scale following lemur paper
+  
+  
 }
 
 ################
@@ -563,18 +636,17 @@ param.array
 ## SIMULATE MODEL
 ##########################
 
-SimOneModel <- function(model, num_patches, burnin, sim_pop, yrs, ntyr, age.brk, s, param.array, init_fracI, add.inf.mort, printpop, stoch_disease, stoch_demo, intermingling, dispersal){
+SimOneModel <- function(model, num_patches, patch_dim, burnin, sim_pop, yrs, ntyr, age.brk, s, param.array, init_fracI, add.inf.mort, printpop, stoch_disease, stoch_demo, intermingling, dispersal, grid_size){
 
   ################
   ## Grid prep
   ##############
-  
 
   if (dispersal == TRUE || intermingling == TRUE){
     # generate distance matrix for grid
-    GenerateDistMat(num_patches)
+    GenerateDistMat(patch_dim, grid_size)
     # scale distance matrix
-    ScaleDistMat(DistMat = DistMat, num_patches = num_patches)
+   # ScaleDistMat(DistMat = DistMat, num_patches = num_patches)
   }
   
   
@@ -582,11 +654,11 @@ SimOneModel <- function(model, num_patches, burnin, sim_pop, yrs, ntyr, age.brk,
   ## Generate stable age structure
   ################################
   
-  if(model==1){
-    nclass=4 # M, S, I, R
+  if (model == 1){
+    nclass = 4 # M, S, I, R
   }
-  else if(model==2 || model==3){
-    nclass=5 # M, S, I, R, N
+  else if (model == 2 || model == 3){
+    nclass = 5 # M, S, I, R, N
   }
   
   # generate time seq
@@ -614,6 +686,7 @@ SimOneModel <- function(model, num_patches, burnin, sim_pop, yrs, ntyr, age.brk,
       mort_juv[i] <- as.numeric(rnorm(1, param.array$mort_juv_mean[model], param.array$mort_juv_sd[model]))
       fecundity[i] <- as.numeric(rnorm(1, param.array$fecundity_mean[model], param.array$fecundity_sd[model]))
     }
+
     else if(stoch_demo == FALSE){
       mort_ad[i] <- as.numeric(param.array$mort_ad_mean[model])
       mort_juv[i] <- as.numeric(param.array$mort_juv_mean[model])
@@ -643,7 +716,7 @@ SimOneModel <- function(model, num_patches, burnin, sim_pop, yrs, ntyr, age.brk,
     
     # check lambda
     lambda = round(max(Re(eigen(mat1)$value)), 8)
-    # print(paste0("lambda = ", lambda)) #we need the pop to replace itself or grow slightly - must be 1 or greater
+   # print(paste0("lambda = ", lambda)) #we need the pop to replace itself or grow slightly - must be 1 or greater
     
     # gives counts of bats per age year
     bat.mat = stab.struct*sim_pop[i]
@@ -701,14 +774,13 @@ SimOneModel <- function(model, num_patches, burnin, sim_pop, yrs, ntyr, age.brk,
     
     # generate dispersal matrix
     if (dispersal == TRUE){
-      BuildDMat(num_patches = num_patches, ScaleDistMat = ScaleDistMat, d.mode = 'stochastic', biweek = biwk1)
+      BuildDMat(num_patches = num_patches, d.mode = 'annual', biweek = biwk1)
     }
     
     # generate intermingling matrix
     if (intermingling == TRUE){
-      BuildIMat(num_patches = num_patches, DistMat = DistMat, biweek = biwk1)
+      BuildIMat(model = model, num_patches = num_patches, DistMat = DistMat, biweek = biwk1)
     }
-
     
     ####################
     ## INTERMINGLING
@@ -718,17 +790,12 @@ SimOneModel <- function(model, num_patches, burnin, sim_pop, yrs, ntyr, age.brk,
       
       tmp = TransformVect(vec=N_pop_ts[[i]][,j], s=s, c=nclass)
       Npop_epi[[i]] <- tmp
-      #print(i)
-      #print(Npop_epi[[i]])
       
       tmp = MatSplit(matrix(Npop_epi[[i]], ncol=1), r=s, c=1)[,,3] # I is in position 3
       Ipop[[i]] <- tmp
-      #print(Ipop[[i]])
-      #readline(prompt="Press [enter] to continue")
     }
     
-    # calculate intermingling factor
-    sum_intermingle <- c(rep(0, as.numeric(num_patches)))
+    sum_intermingle <- matrix(0, nrow = num_patches, ncol = num_patches)
     
     for (i in 1:num_patches){  
       for (ii in 1:num_patches){
@@ -786,8 +853,9 @@ SimOneModel <- function(model, num_patches, burnin, sim_pop, yrs, ntyr, age.brk,
     ##############################
     ## DISPERSAL
     #############################
+    
     if (dispersal == TRUE){
-      N_pop <- Dmat %*% N_pop
+      N_pop <- DMat %*% N_pop
     }
     
     # round to nearest individual and remove negative values
@@ -938,50 +1006,12 @@ SimOneModel <- function(model, num_patches, burnin, sim_pop, yrs, ntyr, age.brk,
   }
 }
 
-SimAllModels <- function(yrs, numsims, do.save){
-  for (i in 1:3){
-    
-    SimOneModel(model = i,
-                numsims = numsims,
-                num_patches = 4,
-                sim_pop = GeneratePops(num_patches, prop_occupied = 0.5, grid_mode = "static", pop_mode = "static"), 
-                param.array = param.array, 
-                burnin = 0, 
-                yrs = yrs, 
-                do.plot = TRUE)
-    beep(i)
-    
-  }
-  p4 <- plot_grid(p1_1, p2_1, p3_1)
-  print(p4)
-  
-  p5 <- plot_grid(p1_2, p2_2, p3_2)
-  print(p4)
-  
-  if(do.save==TRUE){
-    ggsave(file = paste0("AllModels_NumSims", numsims, "_NumYrs", yrs, "_", Sys.time(), ".png"),
-           plot=p4,
-           units="mm",  
-           width=70, 
-           height=60, 
-           scale=3, 
-           dpi=300)
-    
-    ggsave(file = paste0("CountAllModels_NumSims", numsims, "_NumYrs", yrs, "_", Sys.time(), ".png"),
-           plot=p5,
-           units="mm",  
-           width=70, 
-           height=60, 
-           scale=3, 
-           dpi=300)
-  }
-}
-
 #####################
 ## SIMULATION WRAPPER
 ####################
 
-SimWrap <- function(model, sim_pop, numsims, num_patches, param.array, burnin, yrs, do.plot, do.save.plot, do.save.data){
+# Plotting and initial conditions
+SimWrap <- function(model, sim_pop, numsims, patch_dim, num_patches, param.array, burnin, yrs, grid_size, pop_low, pop_high, do.plot, intermingling, dispersal, do.save.plot, do.save.data){
   
   # generate param array
   param.array = param.array 
@@ -991,8 +1021,17 @@ SimWrap <- function(model, sim_pop, numsims, num_patches, param.array, burnin, y
   
   # run sims, saving output
   for(i in 1:numsims){
+    print(paste0("sim = ", i))
+    
+    # create global matricies
+    DMat <<- matrix(0, ncol = num_patches, nrow = num_patches) # dispersal
+    IMat <<- matrix(0, ncol = num_patches, nrow = num_patches) # intermingling
+    DistMat <<- matrix(0, ncol = patch_dim*patch_dim, nrow = patch_dim*patch_dim) # distance
+    
     output <- SimOneModel(model = model,
                           num_patches = num_patches,
+                          patch_dim = patch_dim,
+                          grid_size = grid_size,
                           burnin = burnin,
                           sim_pop = sim_pop, # from Natural History of Madagascar
                           yrs = yrs,
@@ -1000,13 +1039,13 @@ SimWrap <- function(model, sim_pop, numsims, num_patches, param.array, burnin, y
                           s = 20,
                           age.brk = 20,
                           param.array = param.array,
-                          init_fracI = runif(num_patches, min = 0.1, max = 0.3), # from serology reported in Brook et al 2019
-                          add.inf.mort = FALSE, 
+                          init_fracI = runif(num_patches, min = 0.1, max = 0.45), # from serology reported in Brook et al 2019
+                          add.inf.mort = FALSE, # additional mortality from infection 
                           printpop = FALSE,
-                          stoch_demo = TRUE,
+                          stoch_demo = TRUE, # stochasticity is causing populations to crash - needs to be this or higher # stable age structure
                           stoch_disease = TRUE,
-                          intermingling = FALSE,
-                          dispersal = FALSE)
+                          intermingling = intermingling,
+                          dispersal = dispersal)
     output$model <- model
     output$sim <- i
     datalist[[i]] <- output
@@ -1015,11 +1054,13 @@ SimWrap <- function(model, sim_pop, numsims, num_patches, param.array, burnin, y
   sims <<- do.call(rbind, datalist)
   
   if(do.save.data==TRUE){
-    write.csv(sims, paste0(getwd(), "/Output"))
+    write.csv(sims, paste0(getwd(), "/Output/", Sys.time(), "_model_", model, "_disp_", dispersal, "_interm_", intermingling, "_poplow_", pop_low, "_pophigh_", pop_high, "_gridsize_", grid_size))
   }
   
   if(do.plot==TRUE){
     # get mean and CI for stochastic realizations
+    sims <- sims %>% mutate(proportion = ifelse(is.na(proportion), 0, proportion))
+    
     sim.summary <<- sims %>%
       group_by(time, state, subpop) %>%
       dplyr::summarise(mean.proportion = mean(proportion, na.rm = TRUE),
@@ -1044,7 +1085,9 @@ SimWrap <- function(model, sim_pop, numsims, num_patches, param.array, burnin, y
     # plot by model type
     if(model == 1){
       colz = c('M'="violet", 'S' = "mediumseagreen", 'I' = 'tomato', 'R' = "cornflowerblue")
-      p1_1 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.proportion, color=state)) + facet_wrap(~subpop, ncol = sqrt(num_patches), nrow = sqrt(num_patches)) +
+      
+      # PROPORTION
+      p1_1 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.proportion, color=state)) + facet_wrap(~subpop, ncol = patch_dim) +
         theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
         geom_ribbon(aes(x=time, ymin = lower.ci.proportion, ymax = upper.ci.proportion, fill = state), alpha = 0.2) +
         scale_color_manual(values=colz) +
@@ -1052,7 +1095,8 @@ SimWrap <- function(model, sim_pop, numsims, num_patches, param.array, burnin, y
         xlab("Year")
       print(p1_1)
       
-      p1_2 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.totpop)) + facet_wrap(~subpop, ncol = sqrt(num_patches), nrow = sqrt(num_patches)) +
+      # COUNT
+      p1_2 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.totpop)) + facet_wrap(~subpop, ncol = patch_dim) +
         geom_line(aes(x=time, y=mean.count, color=state)) +
         theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
         geom_ribbon(aes(x=time, ymin = lower.ci.count, ymax = upper.ci.count, fill = state), alpha = 0.2) +
@@ -1061,6 +1105,26 @@ SimWrap <- function(model, sim_pop, numsims, num_patches, param.array, burnin, y
         scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRS COUNT. numsims = ", numsims)) +
         xlab("Year")
       print(p1_2)
+      
+      # INFECTED NOT AVERAGED
+      sim.inf <<- sims %>% filter(state == 'I') 
+      sim.inf.summary <<- sim.summary %>% filter(state == 'I') 
+      
+  #    p1_3 <<- ggplot(data = sim.inf, aes(x = time, y = proportion, color = as.factor(sim))) + geom_line() + facet_wrap(~subpop, ncol = patch_dim) +
+   #     theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
+    #    theme(plot.title = element_text(hjust = 0.5)) +
+     #   scale_x_continuous(breaks=seq(0, max(sims$time), 10)) + ggtitle(paste0("MSIRS")) +
+      #  xlab("Year") + ylab("Proportion Infected")
+    #  print(p1_3)
+      
+      # INFECTEDS AVERAGED
+      p1_4 <<- ggplot(data = sim.inf.summary, aes(x = time, y = mean.proportion)) + geom_line() + facet_wrap(~subpop, ncol = patch_dim) +
+        geom_ribbon(aes(x=time, ymin = lower.ci.proportion, ymax = upper.ci.proportion, fill = state), alpha = 0.2) +
+        theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
+        theme(plot.title = element_text(hjust = 0.5)) +
+        scale_x_continuous(breaks=seq(0, max(sims$time), 10)) + ggtitle(paste0("MSIRS")) +
+        xlab("Year") + ylab("Proportion Infected")
+      print(p1_4)
       
       if(do.save.plot==TRUE){
         ggsave(path = "Output", file = paste0("Frac_Model_", model, "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
@@ -1077,55 +1141,62 @@ SimWrap <- function(model, sim_pop, numsims, num_patches, param.array, burnin, y
                height=60, 
                scale=3, 
                dpi=300)
+        ggsave(path = "Output", file = paste0("Inf_Model_Avg", model, "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
+               plot=p1_3,
+               units="mm",  
+               width=70, 
+               height=60, 
+               scale=3, 
+               dpi=300)
+        ggsave(path = "Output", file = paste0("Inf_Model_", model, "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
+               plot=p1_4,
+               units="mm",  
+               width=70, 
+               height=60, 
+               scale=3, 
+               dpi=300)
       }
     }
     if(model == 2){
-      colz = c('M'="violet", 'S' = "mediumseagreen", 'I' = "tomato", 'R' = "cornflowerblue", 'N' = "navy")
-      # count
-      p2_1 <<- grid.arrange(
-        ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.proportion, color=state)) + facet_grid(~subpop) +
+      colz <<- c('M'="violet", 'S' = "mediumseagreen", 'I' = "tomato", 'R' = "cornflowerblue", 'N' = "navy")
+      # PROPORTION
+      p2_1 <<- ggplot(data = sim.summary) + geom_line(aes(x=time, y=mean.proportion, color=state)) + facet_wrap(~subpop, ncol = patch_dim) +
           theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
           geom_ribbon(aes(x=time, ymin = lower.ci.proportion, ymax = upper.ci.proportion, fill = state), alpha = 0.2) +
           scale_color_manual(values=colz) +
           scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRN PROP. numsims = ", max(sims$sim))) +
-          xlab("Year"),
-        nrow = sqrt(num_patches))
+          xlab("Year")
       print(p2_1)
-      # proportion
-      p2_2 <<- grid.arrange(
-        ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.totpop)) + facet_grid(~subpop) +
+      
+      # COUNT
+      p2_2 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.totpop)) + facet_wrap(~subpop, ncol = patch_dim) +
           geom_line(aes(x=time, y=mean.count, color=state)) +
           theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
           geom_ribbon(aes(x=time, ymin = lower.ci.count, ymax = upper.ci.count, fill = state), alpha = 0.2) +
           geom_ribbon(aes(x=time, ymin = lower.ci.totpop, ymax = upper.ci.totpop), alpha = 0.2) +
           scale_color_manual(values=colz) +
           scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRN COUNT. numsims = ", max(sims$sim))) +
-          xlab("Year"),
-        nrow = sqrt(num_patches))
+          xlab("Year")
       print(p2_2)
       
-      # just infecteds, not averaged over sim
+      # INFECTED NOT AVERAGED
       sim.inf <<- sims %>% filter(state == 'I') 
       sim.inf.summary <<- sim.summary %>% filter(state == 'I') 
       
-      p2_3 <<- grid.arrange(
-        ggplot(data = sim.inf, aes(x = time, y = proportion, color = as.factor(sim))) + geom_line() + #facet_grid(~subpop) +
-          theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
-          theme(plot.title = element_text(hjust = 0.5)) +
-          scale_x_continuous(breaks=seq(0, max(sims$time), 10)) + ggtitle(paste0("MSIRN")) +
-          xlab("Year") + ylab("Proportion Infected"),
-        nrow = sqrt(max(sims$subpop)))
-      print(p2_3)
+    #  p2_3 <<- ggplot(data = sim.inf, aes(x = time, y = proportion, color = as.factor(sim))) + geom_line() + facet_wrap(~subpop, ncol = patch_dim) +
+     #     theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
+      #    theme(plot.title = element_text(hjust = 0.5)) +
+       #   scale_x_continuous(breaks=seq(0, max(sims$time), 10)) + ggtitle(paste0("MSIRN")) +
+        #  xlab("Year") + ylab("Proportion Infected")
+      #print(p2_3)
       
-      # just infecteds, averaged over sims
-      p2_4 <<- grid.arrange(
-        ggplot(data = sim.inf.summary, aes(x = time, y = mean.proportion)) + geom_line() + #facet_grid(~subpop) +
+      # INFECTEDS AVERAGED
+      p2_4 <<- ggplot(data = sim.inf.summary, aes(x = time, y = mean.proportion)) + geom_line() + facet_wrap(~subpop, ncol = patch_dim) +
           geom_ribbon(aes(x=time, ymin = lower.ci.proportion, ymax = upper.ci.proportion, fill = state), alpha = 0.2) +
           theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
           theme(plot.title = element_text(hjust = 0.5)) +
           scale_x_continuous(breaks=seq(0, max(sims$time), 10)) + ggtitle(paste0("MSIRN")) +
-          xlab("Year") + ylab("Proportion Infected"),
-        nrow = sqrt(max(sims$subpop)))
+          xlab("Year") + ylab("Proportion Infected")
       print(p2_4)
       
       
@@ -1162,27 +1233,46 @@ SimWrap <- function(model, sim_pop, numsims, num_patches, param.array, burnin, y
     }
     if( model == 3){
       colz = c('M'="violet", 'S' = "mediumseagreen", 'I' = 'tomato', 'R' = "cornflowerblue", 'N' = "navy")
-      p3_1 <<- grid.arrange(
-        ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.proportion, color=state)) + facet_grid(~subpop) +
+      
+      # PROPORTION
+      p3_1 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.proportion, color=state)) + facet_wrap(~subpop, ncol = patch_dim) +
           theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
           geom_ribbon(aes(x=time, ymin = lower.ci.proportion, ymax = upper.ci.proportion, fill = state), alpha = 0.2) +
           scale_color_manual(values=colz) +
-          scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRNI PROP. numsims = ", numsims)) +
-          xlab("Year"),
-        nrow = sqrt(num_patches))
+          scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle("MSIRNI PROP") +
+          xlab("Year")
       print(p3_1)
       
-      p3_2 <<- grid.arrange(
-        ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.totpop)) + facet_grid(~subpop) +
+      # COUNT
+      p3_2 <<- ggplot(data=sim.summary) + geom_line(aes(x=time, y=mean.totpop)) + facet_wrap(~subpop, ncol = patch_dim) +
           geom_line(aes(x=time, y=mean.count, color=state)) +
           theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
           geom_ribbon(aes(x=time, ymin = lower.ci.count, ymax = upper.ci.count, fill = state), alpha = 0.2) +
           geom_ribbon(aes(x=time, ymin = lower.ci.totpop, ymax = upper.ci.totpop), alpha = 0.2) +
           scale_color_manual(values=colz) +
-          scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle(paste0("MSIRNI COUNT. numsims = ", numsims)) +
-          xlab("Year"),
-        nrow = sqrt(num_patches))
+          scale_x_continuous(breaks=seq(0, max(sim.summary$time), 1)) + ggtitle("MSIRNI COUNT") +
+          xlab("Year")
       print(p3_2)
+      
+      # INFECTED NOT AVERAGED
+      sim.inf <<- sims %>% filter(state == 'I') 
+      sim.inf.summary <<- sim.summary %>% filter(state == 'I') 
+      
+    #  p3_3 <<- ggplot(data = sim.inf, aes(x = time, y = proportion, color = as.factor(sim))) + geom_line() + facet_wrap(~subpop, ncol = patch_dim) +
+     #   theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
+      #  theme(plot.title = element_text(hjust = 0.5)) +
+       # scale_x_continuous(breaks=seq(0, max(sims$time), 10)) + ggtitle(paste0("MSIRNI")) +
+        #xlab("Year") + ylab("Proportion Infected")
+    #  print(p3_3)
+      
+      # INFECTEDS AVERAGED
+      p3_4 <<- ggplot(data = sim.inf.summary, aes(x = time, y = mean.proportion)) + geom_line() + facet_wrap(~subpop, ncol = patch_dim) +
+        geom_ribbon(aes(x=time, ymin = lower.ci.proportion, ymax = upper.ci.proportion, fill = state), alpha = 0.2) +
+        theme_bw() + theme(panel.grid = element_blank(), strip.background = element_rect(fill="white")) + 
+        theme(plot.title = element_text(hjust = 0.5)) +
+        scale_x_continuous(breaks=seq(0, max(sims$time), 10)) + ggtitle(paste0("MSIRNI")) +
+        xlab("Year") + ylab("Proportion Infected")
+      print(p3_4)
       
       if(do.save.plot==TRUE){
         ggsave(path = "Output", file = paste0("Frac_Model_", model, "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
@@ -1200,6 +1290,20 @@ SimWrap <- function(model, sim_pop, numsims, num_patches, param.array, burnin, y
                height=60, 
                scale=3, 
                dpi=300)
+        ggsave(path = "Output", file = paste0("Inf_Model_Avg", model, "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
+               plot=p3_3,
+               units="mm",  
+               width=70, 
+               height=60, 
+               scale=3, 
+               dpi=300)
+        ggsave(path = "Output", file = paste0("Inf_Model_", model, "_NumSims_", numsims, "_Yrs_", yrs, "_", Sys.time(), ".png"),
+               plot=p3_4,
+               units="mm",  
+               width=70, 
+               height=60, 
+               scale=3, 
+               dpi=300)
       }
     }
   }
@@ -1208,28 +1312,79 @@ SimWrap <- function(model, sim_pop, numsims, num_patches, param.array, burnin, y
 #-------------------------------------------------------------------------------------------------------------------------#
 
 ###################
-## RUN ONE MODEL
+## RUN MODEL
 ##################
 
-test <- SimWrap(model = 2,
-                numsims = 5,
-                num_patches = 1, # fixed for now
-                sim_pop = floor(runif(1, min = 10, max = 500)),
-               # sim_pop = GeneratePops(num_patches = 4, prop_occupied_patches = 0.25, grid_mode = "stochastic", pop_mode = "stochastic"), 
-                param.array = param.array, 
-                burnin = 0, 
-                yrs = 10, 
-                do.plot = TRUE,
-                do.save.plot = FALSE,
-                do.save.data = FALSE)
+RunModel <- function(model, numsims, patch_dim, num_patches = patch_dim*patch_dim, yrs, intermingling, dispersal, grid_size, pop_low, pop_high){
+  
+  SimWrap(model = model,
+          numsims = numsims,
+          patch_dim = patch_dim, # fixed for now
+          num_patches = num_patches, # square
+          grid_size = grid_size,
+          pop_low = pop_low,
+          pop_high = pop_high,
+          # sim_pop = floor(runif(num_patches, min = 4000, max = 5000)), # all patches occupied
+          sim_pop = GeneratePops(num_patches = num_patches, prop_occupied_patches = 0.68, grid_mode = "stochastic", pop_mode = "stochastic", pop_low = pop_low, pop_high = pop_high), 
+          param.array = param.array, 
+          burnin = 0, 
+          yrs = yrs, 
+          intermingling = intermingling,
+          dispersal = dispersal,
+          do.plot = FALSE,
+          do.save.plot = FALSE,
+          do.save.data = TRUE)
+  
+    beep()
+}
 
-beep()
+################
+## SUPER LOOP
+###############
 
-##############################
-## SUPER LOOP - ALL 3 MODELS
-#############################
+# range of grid sizes
+grid_vect <- as.vector(c(100, 1000, 5000, 10000, 30000, 50000, 70000, 100000))
 
-SimAllModels(yrs = 1, numsims = 5, do.save=TRUE)  
+# range of pop sizes
+pop_low <- as.vector(c(10, 200, 800, 1500, 3000, 8000, 13000, 18000))
+pop_high <- as.vector(c(100, 400, 1000, 2000, 4000, 10000, 15000, 20000))
+
+pop_vect <- data.frame(pop_low, pop_high)
+
+# range of patch dimensions
+patch_vect <- as.vector(c(2, 4, 8, 10))
+
+# connectivity
+intermingle_vect <- as.vector(c("TRUE", "TRUE", "FALSE", "FALSE"))
+dispersal_vect <- as.vector(c("TRUE", "FALSE", "TRUE", "FALSE"))
+
+# test
+RunModel(model = 1, numsims = 2, patch_dim = 3, yrs = 1, intermingling = intermingle_vect[1], dispersal = FALSE, grid_size = 100, pop_low = 10, pop_high = 100)
+
+
+# for (i in 1:3){ # models 
+#   for (j in 1:length(grid_vect)){ # grid sizes
+#     for (k in 1:length(patch_vect)){ # number of patches
+#       for (m in 1:length(pop_low)){ # init population size
+#         for (n in 1:length(dispersal_vect)){
+#           RunModel(
+#             model = i,
+#             numsims = 5,
+#             patch_dim = patch_vect[k],
+#             yrs = 20,
+#             intermingling = intermingle_vect[n],
+#             dispersal = dispersal_vect[n],
+#             grid_size = grid_vect[j],
+#             pop_low = pop_vect[1,m],
+#             pop_high = pop_vect[2,m]
+#           )
+#         }
+#       }
+#     }
+#   }  
+# }
+
+
 
 
 

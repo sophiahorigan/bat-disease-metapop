@@ -14,6 +14,7 @@ rm(list=ls())
 library(lubridate)
 library(dplyr)
 library(sp)
+library(sf)
 library(adehabitatHR)
 library(ggplot2)
 library(gganimate)
@@ -23,12 +24,12 @@ library(geosphere)
 
 #--------------------------------------------------------------------------------------------
 ## SET WD
-homedir <- "/Users/sophiahorigan/Documents/GitHub/Bat-disease-metapop/bat-disease-metapop/Models/WIP/"
+homedir <- "/Users/shorigan/Documents/GitHub/Bat-disease-metapop/bat-disease-metapop/Models/WIP/"
 setwd(homedir)
 
 #--------------------------------------------------------------------------------------------
 ## LOAD DATA
-points.df <- read.csv(paste0(homedir,"/Input/Movebank-AllTags-AllSensorTypes-06072024.csv"), header = TRUE)
+points.df <- read.csv(paste0(homedir,"/Input/Movebank-AllTags-AllSensorTypes-06182024.csv"), header = TRUE)
 
 #--------------------------------------------------------------------------------------------
 ## CLEAN DATA
@@ -40,21 +41,21 @@ points.df$timestamp <- ymd_hms(points.df$timestamp)
 points.df$timestamp <- with_tz(points.df$timestamp, "Africa/Addis_Ababa")
 # add site column
 points.df <- points.df %>% 
-  mutate(site = case_when(grepl("MAN", individual.local.identifier) ~ 'Ambositra - P',
-                          grepl("ANA", individual.local.identifier) ~ 'Analambotaka - P',
-                          grepl("TSI", individual.local.identifier) ~ 'Marotsipohy - P',
-                          grepl("MARO", individual.local.identifier) ~ 'Marovitsika - P',
-                          grepl("HAR", individual.local.identifier) ~ 'Nosy Hara - P',
-                          grepl("KEL", individual.local.identifier) ~ 'Angavokely - E',
-                          grepl("LOR", individual.local.identifier) ~ 'Ambositra - E',
-                          grepl("NAT", individual.local.identifier) ~ 'Mangroves - P',
-                          grepl("VHL", individual.local.identifier) ~ 'Vahialava - P',
-                          grepl("KEL", individual.local.identifier) ~ 'Angavokely - E',
-                          grepl("WAY", individual.local.identifier) ~ 'Ankarana - E'))
+  mutate(site = case_when(grepl("MAN", individual.local.identifier) ~ 'Ambositra', # pteropus
+                          grepl("ANA", individual.local.identifier) ~ 'Analambotaka', # pteropus
+                          grepl("TSI", individual.local.identifier) ~ 'Marotsipohy', # pteropus
+                          grepl("MARO", individual.local.identifier) ~ 'Marovitsika', # pteropus
+                          grepl("HAR", individual.local.identifier) ~ 'Nosy Hara', # eidolon
+                          grepl("LOR", individual.local.identifier) ~ 'Ambositra', # eidolon
+                          grepl("NAT", individual.local.identifier) ~ 'Mangroves', # pteropus
+                          grepl("VHL", individual.local.identifier) ~ 'Vahialava', # pteropus
+                          grepl("KEL", individual.local.identifier) ~ 'Angavokely', # eidolon
+                          grepl("WAY", individual.local.identifier) ~ 'Ankarana')) # eidolon
 
 table(points.df$individual.local.identifier)
 # drop any that have less than 5 data points (right now just 1)
 points.df <- points.df[!(points.df$individual.local.identifier %in% "LOR002"),]
+
 
 # separate Pteropus and Eidolon
 pteropus.points <- points.df %>%
@@ -70,50 +71,114 @@ eidolon.points <- points.df %>%
 # To format for spatial analyses, we need to remove NA values from the coordinate columns
 eidolon.points <- eidolon.points[!is.na(eidolon.points$location.lat) & !is.na(eidolon.points$location.long),]
 
+# DAY VS NIGHT 
+dusk_hour = 17 # made up 
+dawn_hour = 6
+
+eidolon.points <- eidolon.points %>%
+  mutate(daytime = ifelse(hour(timestamp) < dusk_hour & hour(timestamp) > dawn_hour, "day", "night"))
+
+tmp <- eidolon.points[, c("site", "location.long", "location.lat", "daytime")]
+
+eidolon.only.day <- tmp %>% 
+  filter(daytime == "day")
+
+eidolon.only.night <- tmp %>% 
+  filter(daytime == "night")
+
+
 # The dataframe should only have 3 columns (x, y, and an identifier) for home ranges
 eidolon.sp <- eidolon.points[, c("individual.local.identifier", "location.long", "location.lat")]
+eidolon.site <- eidolon.points[, c("site", "location.long", "location.lat")]
+eidolon.only.day.sp <- eidolon.only.day[, c("site", "location.long", "location.lat")]
+eidolon.only.night.sp <- eidolon.only.night[, c("site", "location.long", "location.lat")]
 
 # Turn into a spatial points dataframe (class: SpatialPointsDataFrame)
 coordinates(eidolon.sp) <- c("location.long", "location.lat")
+coordinates(eidolon.site) <- c("location.long", "location.lat")
+coordinates(eidolon.only.day.sp) <- c("location.long", "location.lat")
+coordinates(eidolon.only.night.sp) <- c("location.long", "location.lat")
 
 # Examine the structure of our SpatialPointsDataFrame
 str(eidolon.sp)
+str(eidolon.site)
+str(eidolon.only.day.sp)
+str(eidolon.only.night.sp)
+
+# convert to UTM
+locations_sf <- points.df %>% 
+  st_as_sf(coords = c("location.long", "location.lat"), crs = 4326)
+
+locations_projected <- locations_sf %>% 
+  st_transform(crs = "EPSG:32738") # see https://epsg.io/32604 for more info...
+
 
 # Set coordinate system & projection
-crs_wgs84 <- CRS(SRS_string = "EPSG:4326") # WGS 84 has EPSG code 4326
+crs_wgs84 <- CRS("+proj=longlat +datum=WGS84")
 class(crs_wgs84)
 slot(eidolon.sp, "proj4string") <- crs_wgs84
+slot(eidolon.site, "proj4string") <- crs_wgs84
+slot(eidolon.only.day.sp, "proj4string") <- crs_wgs84
+slot(eidolon.only.night.sp, "proj4string") <- crs_wgs84
+
+# convert to UTM
+eidolon.only.night.sp <- spTransform(eidolon.only.night.sp, CRS("+proj=utm +zone=38 +south ellps=WGS84"))
+eidolon.only.night.sp
 
 #--------------------------------------------------------------------------------------------
 ## INTERMINGLING
 # CALCULATE KERNAL DENSITIY AREA
 
-# calculate kernel densities
-eidolon.kernel <- kernelUD(eidolon.sp, h = "href")
-image(eidolon.kernel)
-
-# get volume
-eidolon.kernel.vud <- getvolumeUD(eidolon.kernel)
+# INDIVIDUAL
+# calculate UD
+eidolon.kernel <- kernelUD(eidolon.only.night.sp, h="href")
 
 # get contour
-levels <- c(25, 50, 75, 95, 100)
-list <- vector(mode = "list", length = length(eidolon.kernel.vud))
+list <- vector(mode = "list", length = length(eidolon.kernel))
 
-for (i in 1:length(eidolon.kernel.vud)){
-  list[[i]] <- as.image.SpatialGridDataFrame(eidolon.kernel.vud[[i]])
+for (i in 1:length(eidolon.kernel)){
+  list[[i]] <- as.image.SpatialGridDataFrame(eidolon.kernel[[i]])
+  image(list[[i]])
+  contour(list[[i]], add=TRUE)
+}
+
+# calculate area
+# grid size issues
+UD.area <- kernel.area(eidolon.kernel, percent = seq(10, 90, by=5), unout = "m2")
+plot(UD.area)
+
+UD.area
+
+## ----------------------------
+# make contours
+UD.rad <- sqrt(UD.area/pi)
+
+# --------
+# BY SITE # NEED TO UPDATE
+# calculate kernel densities
+eidolon.kernel.site <- kernelUD(eidolon.site, h = "href")
+image(eidolon.kernel.site)
+
+# get volume
+eidolon.kernel.site.vud <- getvolumeUD(eidolon.kernel.site)
+
+# get contour
+levels.site <- c(10, 20, 30, 40, 50, 60, 70, 80, 90, 100)
+list.site <- vector(mode = "list", length = length(eidolon.kernel.site.vud))
+
+for (i in 1:length(eidolon.kernel.site.vud)){
+  list.site[[i]] <- as.image.SpatialGridDataFrame(eidolon.kernel.site.vud[[i]])
 }
 
 # plot
-par(mfrow = c(2,3))
-
-for (i in 1:length(eidolon.kernel.vud)){
-  plot(eidolon.kernel.vud[[i]])
-  contour(list[[i]], add = TRUE, levels = levels)
+for (i in 1:length(eidolon.kernel.site.vud)){
+  plot(eidolon.kernel.site.vud[[i]])
+  contour(list.site[[i]], add = TRUE, levels = levels.site)
 }
 
 # calculate home range area
 # grid size issues
-homerange <- kernel.area(eidolon.kernel, percent = seq(50, 95, by=5))
+homerange <- kernel.area(eidolon.kernel.site, percent = seq(10, 90, by = 5))
 plot(homerange)
 
 homerange
@@ -124,31 +189,13 @@ homerange
 #--------------------------------------------------------------------------------------------
 ## DISPSERSAL
 
-# prep data
-dusk_hour = 18 # made up 
-dawn_hour = 5
-
-eidolon.points <- eidolon.points %>%
-  mutate(daytime = ifelse(hour(timestamp) < dusk_hour & hour(timestamp) > dawn_hour, "day", "night"))
-eidolon.points %>% 
-  group_by(individual.taxon.canonical.name)  %>%
-  count(daytime)
-
-eidolon.daytime <- eidolon.points[, c("individual.local.identifier", "site", "daytime", "location.long", "location.lat")]
-
 # 1. Count the number of putative roosts used across the total number of days
-ggplot(data = eidolon.daytime, aes(location.long, location.lat)) + 
+ggplot(data = eidolon.daytime[eidolon.daytime], aes(location.long, location.lat)) + 
   geom_point(aes(colour = daytime)) +
   facet_wrap(individual.local.identifier ~ ., scales = 'free')
 
-# 2. Animate just daytime roosts
-tmp <- eidolon.points[, c("individual.local.identifier", "daytime", "location.long", "location.lat", "timestamp")]
-
-eidolon.only.day <- tmp %>% 
-  filter(daytime == "day")
-
 # Make sure points are in order (in case they weren't before)
-eidolon.only.day <- eidolon.only.day %>%
+eidolon.only.day <- tmp %>%
   arrange(individual.local.identifier, timestamp) %>% # arrange by animal, and ascending date
   filter(!is.na(location.long), !is.na(location.lat)) # remove NA's
 
@@ -173,9 +220,9 @@ plot(har002$timestamp, har002$location.lat)
 for (i in 1:length(har002$location.long)){ # points > 1000m?
   print(i)
   print(i+1)
-  print(distm(c(har002$location.long[i], har002$location.lat[i]), c(har002$location.long[i+1], har002$location.lat[i+1]), fun = distHaversine))
+  print(distm(c(har002$location.long[i], har002$location.lat[i]), c(har002$location.long[i+1], har002$location.lat[i+1]), fun = distGeo))
 }
-num_switch_har002 = 2
+num_switch_har002 = 1
 # duration
 x = interval(har002$timestamp[1], har002$timestamp[length(har002$timestamp)])
 y = int_length(x) # in seconds
@@ -184,17 +231,17 @@ d # 10 days
 daily_prob_disp_har002 = num_switch_har002/d
 daily_prob_disp_har002 
 
-# har003 
+# har003 - 0 roost switches
 plot(har003$timestamp, har003$location.long)
 plot(har003$timestamp, har003$location.lat)
-num_switch_har003 = 0
+num_switch_har003 = 1
 # duration
-x = interval(har003$timestamp[1], har003$timestamp[length(har002$timestamp)])
+x = interval(har003$timestamp[1], har003$timestamp[length(har003$timestamp)])
 y = int_length(x) # in seconds
 d = y/86400
 d # 1
 daily_prob_disp_har003 = num_switch_har003/d
-daily_prob_disp_har003 = 0 # 0
+daily_prob_disp_har003 
 
 # kel815 
 plot(kel815$timestamp, kel815$location.long)
@@ -202,78 +249,60 @@ plot(kel815$timestamp, kel815$location.lat)
 for (i in 1:length(kel815$location.long)){ # points > 1000m?
   print(i)
   print(i+1)
-  print(distm(c(kel815$location.long[i], kel815$location.lat[i]), c(kel815$location.long[i+1], kel815$location.lat[i+1]), fun = distHaversine))
+  print(distm(c(kel815$location.long[i], kel815$location.lat[i]), c(kel815$location.long[i+1], kel815$location.lat[i+1]), fun = distGeo))
 }
-num_switch_kel815 = 14
+num_roost_switch_kel815 = 1
 # duration
 x = interval(kel815$timestamp[1], kel815$timestamp[length(kel815$timestamp)])
 y = int_length(x) # in seconds
 d = y/86400
 d # 60
-daily_prob_disp_kel815 = num_switch_kel815/d
-daily_prob_disp_kel815
+daily_prob_disp_kel815 = num_roost_switch_kel815/d
+daily_prob_disp_kel815 # 0.1011129
 
-# kel818 
+# kel818 - 2 roost switches
 plot(kel818$timestamp, kel818$location.long)
 plot(kel818$timestamp, kel818$location.lat)
-for (i in 1:length(kel818$location.long)){ # points > 1000m?
-  print(i)
-  print(i+1)
-  print(distm(c(kel818$location.long[i], kel818$location.lat[i]), c(kel818$location.long[i+1], kel818$location.lat[i+1]), fun = distHaversine))
-}
-num_switch_kel818 = 2
+num_roost_switch_kel815 = 2
 # duration
 x = interval(kel818$timestamp[1], kel818$timestamp[length(kel818$timestamp)])
 y = int_length(x) # in seconds
 d = y/86400
 d # 48
-daily_prob_disp_kel818 = num_switch_kel818/d
-daily_prob_disp_kel818 
+daily_prob_disp_kel818 = num_roost_switch_kel815/d
+daily_prob_disp_kel818 # 0.07221715
 
-# way155 
+# way155 - 2 roost switch
 plot(way155$timestamp, way155$location.long)
 plot(way155$timestamp, way155$location.lat)
-for (i in 1:length(way155$location.long)){ # points > 1000m?
-  print(i)
-  print(i+1)
-  print(distm(c(way155$location.long[i], way155$location.lat[i]), c(way155$location.long[i+1], way155$location.lat[i+1]), fun = distHaversine))
-}
-num_switch_way155 = 0
 # duration
 x = interval(way155$timestamp[1], way155$timestamp[length(way155$timestamp)])
 y = int_length(x) # in seconds
 d = y/86400
 d # 24
-daily_prob_disp_way155 = num_switch_way155/d
-daily_prob_disp_way155 
+daily_prob_disp_way155 = 1/d
+daily_prob_disp_way155 # 0.04166667
 
-# way179 
+# way179 - 2 roost switches
 plot(way179$timestamp, way179$location.long)
 plot(way179$timestamp, way179$location.lat)
-for (i in 1:length(way179$location.long)){ # points > 1000m?
-  print(i)
-  print(i+1)
-  print(distm(c(way179$location.long[i], way179$location.lat[i]), c(way179$location.long[i+1], way179$location.lat[i+1]), fun = distHaversine))
-}
-num_switch_way179 = 3
 # duration
 x = interval(way179$timestamp[1], way179$timestamp[length(way179$timestamp)])
 y = int_length(x) # in seconds
 d = y/86400
 d # 36
-daily_prob_disp_way179 = num_switch_way179/d
+daily_prob_disp_way179 = 2/d
 daily_prob_disp_way179 # 0.05405622
 
 # average daily prob of dispersal all 5 bats
-a <- c(daily_prob_disp_har002, daily_prob_disp_har003, daily_prob_disp_kel815, daily_prob_disp_kel818, daily_prob_disp_way155, daily_prob_disp_way179)
-ave_prob_disp = mean(a)
-
+a <- c(daily_prob_disp_har002, daily_prob_disp_har003, daily_prob_disp_kel815, daily_prob_disp_kel818)
+ave_prob_disp = mean(a) # 0.02292944
+ave_prob_disp
 # biweekly dispersal probability
 # what is the probability that each bat disperses at least once in a two week period?
 biweek_prob = 1 - (1 - ave_prob_disp)^14
+# is this nearest neighbor? should I make it scaled by distance between the sites?
 biweek_prob
-# multiply by a randomly drawn value 0 - 1 to factor in stochasticity
-
 #--------------------------------------
 # MAKE TRACK PLOTS AND ANIMATIONS
 # Make spatial
