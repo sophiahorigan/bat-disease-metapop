@@ -17,27 +17,49 @@
 # using df.all output from running 7_SummarizeSimOutput.R
 
 library(ggplot2)
-tmp <- df.all
+df.all <- sim_output_eeid
 
-
-df.all <- tmp
 # data cleaning
-# grid size
-df.all[df.all$grid_size == "gridsize_100_", 3] <- 100 
 # sim_type
-df.all[df.all$sim_type == "disp_F_interm_F_", 2] <- "No connectivity" 
-df.all[df.all$sim_type == "disp_T_interm_F_", 2] <- "Dispersal only" 
-df.all[df.all$sim_type == "disp_F_interm_T_", 2] <- "Intermingling only" 
-df.all[df.all$sim_type == "disp_T_interm_T_", 2] <- "Dispersal and intermingling" 
+df.all[df.all$sim_type == "FF", 2] <- "No connectivity" 
+df.all[df.all$sim_type == "TF", 2] <- "Dispersal only" 
+df.all[df.all$sim_type == "FT", 2] <- "Intermingling only" 
+df.all[df.all$sim_type == "TT", 2] <- "Dispersal and intermingling" 
 
 # MSIRS
+ggplot(data = df.all[df.all$model == 1, ]) +
+  geom_point(aes(x = avg_init_pop, y = avg_extinct_time, color = as.factor(num_patch)), size = 4) + 
+  facet_wrap(~sim_type) +
+  geom_line(aes(x = avg_init_pop, y = avg_extinct_time, color = as.factor(num_patch)), linewidth = 2) + 
+  #ggtitle("MSIRS", ) + theme(plot.title = element_text(hjust = 0.5)) +
+  guides(color = guide_legend(title = "Number of patches")) +
+  xlab("Average initial population size") + ylab("Average time to extinction (years)") +
+  theme(text = element_text(size = 20),
+        axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(legend.position="none")
 
 # MSIRN
 ggplot(data = df.all[df.all$model == 2, ]) +
-  geom_point(aes(x = avg_init_pop, y = avg_extinct_time, color = as.factor(num_patch), shape = as.factor(grid_size))) + 
+  geom_point(aes(x = avg_init_pop, y = avg_extinct_time, color = as.factor(num_patch)), size = 4) + 
   facet_wrap(~sim_type) +
-  geom_line(aes(x = avg_init_pop, y = avg_extinct_time, color = as.factor(num_patch))) + 
-  ggtitle("MSIRN", ) + theme(plot.title = element_text(hjust = 0.5)) +
-  xlab("Average initial population size") + ylab("Average time to extinction (years)")
+  geom_line(aes(x = avg_init_pop, y = avg_extinct_time, color = as.factor(num_patch)), linewidth = 2) + 
+  #ggtitle("MSIRN", ) + theme(plot.title = element_text(hjust = 0.5)) +
+  guides(color = guide_legend(title = "Number of patches")) +
+  xlab("Average initial population size") + ylab("Average time to extinction (years)") +
+  theme(text = element_text(size = 20),
+        axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(legend.position="none")
 
 # MSIRNI
+ggplot(data = df.all[df.all$model == 3, ]) +
+  geom_point(aes(x = avg_init_pop, y = avg_extinct_time, color = as.factor(num_patch)), size = 4) + 
+  facet_wrap(~sim_type) +
+  geom_line(aes(x = avg_init_pop, y = avg_extinct_time, color = as.factor(num_patch)), linewidth = 2) + 
+ # ggtitle("MSIRN", ) + theme(plot.title = element_text(hjust = 0.5)) +
+  guides(color = guide_legend(title = "Number of patches")) +
+  xlab("Average initial population size") + ylab("Average time to extinction (years)") +
+  theme(text = element_text(size = 20),
+        axis.text.x = element_text(angle = 90, hjust = 1)) +
+  theme(legend.position="none")
+
+
